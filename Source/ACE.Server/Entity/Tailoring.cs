@@ -12,6 +12,7 @@ using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Factories;
+using ACE.Server.Factories.Entity;
 using ACE.Server.Factories.Tables;
 using ACE.Server.Managers;
 using ACE.Server.Network.GameEvent.Events;
@@ -50,6 +51,7 @@ namespace ACE.Server.Entity
         public const uint MorphGemRemoveMissileDReq = 480484;
         public const uint MorphGemRemoveMeleeDReq = 480483;
         public const uint MorphGemRandomizeWeaponImbue = 480486;
+        public const uint MorphGemRandomizeWeaponElement = 480487;
         public const uint MorphGemRemovePlayerReq = 480485;
         public const uint MorphGemSlayerRandom = 480610;
         public const uint MorphGemRemoveLevelReq = 480609;
@@ -262,6 +264,7 @@ namespace ACE.Server.Entity
                 case MorphGemRemoveMissileDReq:
                 case MorphGemRemoveMeleeDReq:
                 case MorphGemRandomizeWeaponImbue:
+                case MorphGemRandomizeWeaponElement:
                 case MorphGemRemovePlayerReq:
                 case MorphGemSlayerRandom:
                 case MorphGemRemoveLevelReq:
@@ -1179,6 +1182,165 @@ namespace ACE.Server.Entity
 
                         break;
                     #endregion MorphGemRandomizeWeaponImbue
+
+                    #region MorphGemRandomizeWeaponElement
+                    case MorphGemRandomizeWeaponElement:
+                        Skill[] validSkills = [
+                            Skill.FinesseWeapons,
+                            Skill.HeavyWeapons,
+                            Skill.LightWeapons,
+                            Skill.MissileWeapons,
+                            Skill.TwoHandedCombat,
+                            Skill.WarMagic,
+                        ];
+
+
+                        if (!validSkills.Contains(target.WeaponSkill) || !ContainsOnlyPhysicalOrElemental(target.W_DamageType))
+                        {
+                            player.Session.Network.EnqueueSend(new GameMessageSystemChat($"{target.NameWithMaterial} must have an elemental damage type and weapon skill", ChatMessageType.Broadcast));
+                            return;
+                        }
+
+                        log.Info($"Target Weenie = {target.WeenieClassId}");
+                        log.Info($"Target Damage Type = {target.W_DamageType} - {(int)target.W_DamageType}");
+                        log.Info($"Target Weapon Type = {target.WeaponSkill} - {(int)target.WeaponSkill}");
+
+                        var hasMatrix = false;
+                        WorldObject newWo = null;
+                        if (target.WeaponSkill == Skill.MissileWeapons)
+                        {
+                            foreach(var matrix in LootTables.ElementalMissileWeaponsMatrix)
+                            {
+                                if (matrix.Contains((int)target.WeenieClassId))
+                                {
+                                    int element = ThreadSafeRandom.Next(0, 6);
+                                    hasMatrix = true;
+                                    var wcid = matrix[element];
+                                    var wo = WorldObjectFactory.CreateNewWorldObject((uint)wcid);
+                                    wo.DamageMod = target.DamageMod;
+                                    wo.ElementalDamageBonus = target.ElementalDamageBonus;
+                                    wo.WieldDifficulty = target.WieldDifficulty;
+                                    wo.WieldRequirements = target.WieldRequirements;
+                                    wo.WieldSkillType = target.WieldSkillType;
+                                    wo.WeaponDefense = target.WeaponDefense;
+                                    wo.WeaponTime = target.WeaponTime;
+                                    wo.MaterialType = target.MaterialType;
+                                    wo.GemCount = target.GemCount;
+
+                                    wo.IconId = target.IconId;
+                                    wo.IconUnderlayId = target.IconUnderlayId;
+                                    wo.PaletteTemplate = target.PaletteTemplate;
+                                    wo.Shade = target.Shade;
+                                    wo.ItemWorkmanship = target.ItemWorkmanship;
+                                    wo.NumItemsInMaterial = target.NumItemsInMaterial;
+                                    wo.NumTimesTinkered = target.NumTimesTinkered;
+                                    wo.EncumbranceVal = target.EncumbranceVal;
+                                    wo.WeaponMissileDefense = target.WeaponMissileDefense;
+                                    wo.WeaponMagicDefense = target.WeaponMagicDefense;
+                                    wo.ItemManaCost = target.ItemManaCost;
+                                    wo.ItemMaxMana = target.ItemMaxMana;
+                                    wo.ItemCurMana = target.ItemCurMana;
+                                    wo.ItemSpellcraft = target.ItemSpellcraft;
+                                    wo.ItemDifficulty = target.ItemDifficulty;
+                                    wo.ManaRate = target.ManaRate;
+                                    wo.UiEffects = target.UiEffects;
+                                    wo.TinkerLog = target.TinkerLog;
+                                    wo.
+
+                                    var spells = target.Biota.CloneSpells(target.BiotaDatabaseLock);
+
+                                    foreach (var kvp in spells)
+                                    {
+                                        wo.Biota.GetOrAddKnownSpell(kvp.Key, wo.BiotaDatabaseLock, out var _, kvp.Value);
+                                    }
+
+                                    wo.Value = target.Value;
+                                    wo.LongDesc = LootGenerationFactory.GetLongDesc(wo);
+                                    wo.ImbuedEffect = target.ImbuedEffect;
+                                    wo.SaveBiotaToDatabase();
+                                    newWo = wo;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (target.WeaponSkill == Skill.WarMagic)
+                        {
+                            var count = 0;
+                            foreach(var matrix in LootTables.CasterWeaponsMatrix)
+                            {
+                                // skil no-wield weenies
+                                if (count++ == 0) continue;
+                                if (matrix.Contains((int)target.WeenieClassId))
+                                {
+                                    int element = ThreadSafeRandom.Next(0, 6);
+                                    hasMatrix = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (target.WeaponSkill == Skill.HeavyWeapons)
+                        {
+                            foreach(var matrix in LootTables.HeavyWeaponsMatrix)
+                            {
+                                if (matrix.Contains((int)target.WeenieClassId))
+                                {
+                                    int element = ThreadSafeRandom.Next(0, 4);
+                                    hasMatrix = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (target.WeaponSkill == Skill.FinesseWeapons)
+                        {
+                            foreach(var matrix in LootTables.FinesseWeaponsMatrix)
+                            {
+                                if (matrix.Contains((int)target.WeenieClassId))
+                                {
+                                    int element = ThreadSafeRandom.Next(0, 4);
+                                    hasMatrix = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (target.WeaponSkill == Skill.LightWeapons)
+                        {
+                            foreach(var matrix in LootTables.LightWeaponsMatrix)
+                            {
+                                if (matrix.Contains((int)target.WeenieClassId))
+                                {
+                                    int element = ThreadSafeRandom.Next(0, 4);
+                                    hasMatrix = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (target.WeaponSkill == Skill.TwoHandedCombat)
+                        {
+                            foreach(var matrix in LootTables.TwoHandedWeaponsMatrix)
+                            {
+                                if (matrix.Contains((int)target.WeenieClassId))
+                                {
+                                    int element = ThreadSafeRandom.Next(0, 4);
+                                    hasMatrix = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        player.Session.Network.EnqueueSend(new GameMessageSystemChat($"{target.NameWithMaterial} does {(hasMatrix ? "" : "not")} have a weapon element matrix", ChatMessageType.Broadcast));
+                        if (newWo != null)
+                        {
+                            player.TryCreateInInventoryWithNetworking(newWo);
+                        }
+                        break;
+                    #endregion
+
+
 
                     #region MorphGemRemovePlayerReq
                     case MorphGemRemovePlayerReq:
@@ -2759,6 +2921,7 @@ namespace ACE.Server.Entity
                 case MorphGemRemoveMissileDReq:
                 case MorphGemRemoveMeleeDReq:
                 case MorphGemRandomizeWeaponImbue:
+                case MorphGemRandomizeWeaponElement:
                 case MorphGemRemovePlayerReq:
                 case MorphGemSlayerRandom:
                 case MorphGemRemoveLevelReq:
@@ -2815,6 +2978,12 @@ namespace ACE.Server.Entity
             var matchingLogEntries = logEntries.Where(x => x.Equals(gemWeenieId.ToString()));
 
             return matchingLogEntries?.Count() ?? 0;
+        }
+
+        public static bool ContainsOnlyPhysicalOrElemental(DamageType damageType)
+        {
+            const DamageType allowedTypes = DamageType.Physical | DamageType.Elemental;
+            return damageType != DamageType.Undef && (damageType & allowedTypes) == damageType;
         }
     }
 }
