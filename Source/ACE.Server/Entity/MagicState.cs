@@ -1,6 +1,7 @@
 using System;
 
 using ACE.Entity.Enum;
+using ACE.Server.Entity.Actions;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.WorldObjects;
 
@@ -114,6 +115,13 @@ namespace ACE.Server.Entity
         /// This will be set to TRUE only for the first turn after the CastGesture
         /// </summary>
         public bool AlwaysTurn;
+
+        /// <summary>
+        /// Broadcast delay for animation breaking
+        /// </summary>
+        public DateTime BroadcastDelayUntil { get; set; } = DateTime.MinValue;
+        public ActionChain? DelayedBroadcastChain { get; set; } = null;
+        public double DelayIncrement { get; set; } = 0.0f;
 
         public MagicState(Player player)
         {

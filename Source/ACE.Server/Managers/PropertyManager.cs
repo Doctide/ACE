@@ -667,7 +667,9 @@ namespace ACE.Server.Managers
                 ("force_materialization_duration", new Property<long>(1, "the number of seconds a player should materialize for before logging out")),
                 ("minimum_portalspace_seconds", new Property<long>(3, "the minimum number of seconds a player must be in portal space before exiting")),
                 ("vendor_max_items_per_sale", new Property<long>(24, "the maximum number of items a player can sell to a vendor in a single transaction")),
-                ("vendor_sale_rate_limit_seconds", new Property<long>(60, "the minimum number of seconds that must pass after a player sells to a vendor before a player can sell to a vendor again"))
+                ("vendor_sale_rate_limit_seconds", new Property<long>(60, "the minimum number of seconds that must pass after a player sells to a vendor before a player can sell to a vendor again")),
+                ("animation_break_duration", new Property<long>(20, "the amount of seconds a player should be able to break animation off screen after a successful roll"))
+
                 );
 
         public static readonly ReadOnlyDictionary<string, Property<double>> DefaultDoubleProperties =
@@ -790,7 +792,8 @@ namespace ACE.Server.Managers
                 ("arena_corpse_rot_seconds", new Property<double>(900, "the number of seconds a corpse that is generated in an arena landblock takes to rot. Default 15 mins.")),
                 ("arena_pk_respite_timer", new Property<double>(120, "the number of seconds that a player killer is set to non-player killer status after dying to another player killer in an arena match.  Should be a value less than pk_respite_timer, or else pk_respite_timer will override.")),
                 ("arena_1v1_healkit_skill_bonus_cap", new Property<double>(150, "the maximum effective skill bonus applied from a healing kit during arena 1v1 events.")),
-                ("arena_1v1_healkit_restoration_bonus_cap", new Property<double>(1.5, "the maximum effective restoration bonus applied from a healing kit during arena 1v1 events."))
+                ("arena_1v1_healkit_restoration_bonus_cap", new Property<double>(1.5, "the maximum effective restoration bonus applied from a healing kit during arena 1v1 events.")),
+                ("cast_delay_increment", new Property<double>(0.005, "the delay amount to increment every broadcast until a successful roll delays a broadcast"))
                 );
 
         public static readonly ReadOnlyDictionary<string, Property<string>> DefaultStringProperties =

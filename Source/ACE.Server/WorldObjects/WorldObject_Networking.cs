@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
-
+using ACE.Common;
 using ACE.DatLoader;
 using ACE.DatLoader.Entity;
 using ACE.DatLoader.FileTypes;
@@ -1415,21 +1415,58 @@ namespace ACE.Server.WorldObjects
             return EnqueueBroadcast(true, msgs);
         }
 
+        public void EnqueueDelayedBroadcast(bool sendSelf, Player player, Player self, params GameMessage[] msgs)
+        {
+            /// These values will trigger a cast delay. Only tweak these values if you know what you're doing. 
+            var startCastDelayThreshold = 0.1;
+            var endCastDelayThreshold = 0.65;
+            var broadcastDelay = 0.15;
+            if (
+                (float)(DateTime.UtcNow - self.MagicState.StartTime).TotalSeconds <= startCastDelayThreshold ||
+                (float)(DateTime.UtcNow - self.MagicState.CastGestureStartTime).TotalSeconds > endCastDelayThreshold)
+            {
+                //log.Warn($"Broadcast delayed for player {player.Name}");
+
+                var broadcastChain = new ActionChain();
+
+                /// Lower the broadcast delay if you don't want animations to get too far ahead of themselves. 0.2 should be the max. 
+                broadcastChain.AddDelaySeconds(broadcastDelay);
+
+                broadcastChain.AddAction(this, () =>
+                {
+                    player.Session.Network.EnqueueSend(msgs);
+                });
+
+                broadcastChain.EnqueueChain();
+            }
+            else
+            {
+                //log.Info($"Broadcast sent immediately for player {player.Name}");
+                player.Session.Network.EnqueueSend(msgs);
+            }
+        }
+
         public List<Player> EnqueueBroadcast(bool sendSelf = true, params GameMessage[] msgs)
         {
             if (PhysicsObj == null)
             {
                 if (Container != null)
                     return Container.EnqueueBroadcast(sendSelf, msgs);
-
                 return null;
             }
 
-            if (sendSelf)
+            var self = this as Player;
+
+            if (sendSelf && self != null)
             {
-                if (this is Player self)
-                    self.Session.Network.EnqueueSend(msgs);
+                self.Session.Network.EnqueueSend(msgs);
             }
+
+            var isCasting = self != null && self.CombatMode == CombatMode.Magic && self.MagicState.IsCasting;
+
+            // Calculate time differences as local variables
+            float startTimeDiff = 0f;
+            float gestureStartTimeDiff = 0f;
 
             var nearbyPlayers = PhysicsObj.ObjMaint.GetKnownPlayersValuesAsPlayer();
             foreach (var player in nearbyPlayers)
@@ -1437,7 +1474,49 @@ namespace ACE.Server.WorldObjects
                 if (Visibility && !player.Adminvision)
                     continue;
 
-                player.Session.Network.EnqueueSend(msgs);
+                if (self != null)
+                {
+                    var startCastDelayThreshold = 0.1f;
+                    var endCastDelayThreshold = 0.65f;
+
+                    if (self.CombatMode == CombatMode.Magic && self.MagicState.BroadcastDelayUntil > DateTime.UtcNow)
+                    {
+                        EnqueueDelayedBroadcast(sendSelf, player, self, msgs);
+                    }
+                    else if (
+                        isCasting &&
+                         self.MagicState.StartTime != DateTime.MinValue &&
+                         self.MagicState.CastGestureStartTime != DateTime.MinValue &&
+                         (startTimeDiff <= startCastDelayThreshold ||
+                         gestureStartTimeDiff > endCastDelayThreshold))
+                    {
+                        var breakAnimationRoll = ThreadSafeRandom.Next(0.0f, 1.0f);
+                        //log.Info($"BreakAnimationRoll: {breakAnimationRoll}");
+
+                        if ((breakAnimationRoll - self.MagicState.DelayIncrement) < 0.01 + self.MagicState.DelayIncrement)
+                        {
+                            self.MagicState.BroadcastDelayUntil = DateTime.UtcNow.AddSeconds(PropertyManager.GetLong("animation_break_duration").Item);
+                            self.MagicState.DelayIncrement = 0;
+                        }
+                        else
+                        {
+                            //log.Info($" Broadcast sent immediately for player {player.Name}, isCasting: {isCasting}, delayIncrement: {self.MagicState.DelayIncrement}");
+                            self.MagicState.DelayIncrement += PropertyManager.GetDouble("cast_delay_increment").Item;
+                            player.Session.Network.EnqueueSend(msgs);
+                        }
+                    }
+                    else
+                    {
+                        //log.Info($" Broadcast sent immediately for player {player.Name}, isCasting: {isCasting}, delayIncrement: {self.MagicState.DelayIncrement}");
+                        player.Session.Network.EnqueueSend(msgs);
+                        self.MagicState.BroadcastDelayUntil = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    //log.Info($"Broadcast sent immediately for player {player.Name} (self is null)");
+                    player.Session.Network.EnqueueSend(msgs);
+                }
             }
             return nearbyPlayers;
         }
