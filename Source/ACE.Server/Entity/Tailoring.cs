@@ -2929,7 +2929,7 @@ namespace ACE.Server.Entity
 
                     case MorphGemHieroglyphofPersonAttunement:
 
-                        if (!ApplyMorphGem_RareLegendaryCantrip(player, source, target, 6065, targetItemSpells))
+                        if (!ApplyMorphGem_RareLegendaryCantrip(player, source, target, 6066, targetItemSpells))
                         {
                             return;
                         }
