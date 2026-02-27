@@ -625,6 +625,7 @@ namespace ACE.Server.Managers
                 ("arena_allow_observers", new Property<bool>(true, "enable this to allow players to watch arena matches as invisible observers")),
                 ("tinker_lotto_enabled", new Property<bool>(false, "enables the tinkering lotto feature")),
                 ("force_materialization", new Property<bool>(true, "forces players to materialize on login")),
+                ("force_teleport_materialization", new Property<bool>(true, "forces players to materialize on teleport")),
                 ("disable_pvp_cleave", new Property<bool>(false, "disables melee cleave attacks from targeting players")),
                 ("disable_world_bosses", new Property<bool>(true, "disables spawning of world bosses")),
                 ("jump_cancels_melee", new Property<bool>(false, "cancels melee attacks when the target is jumping")),
@@ -792,7 +793,8 @@ namespace ACE.Server.Managers
                 ("arena_pk_respite_timer", new Property<double>(120, "the number of seconds that a player killer is set to non-player killer status after dying to another player killer in an arena match.  Should be a value less than pk_respite_timer, or else pk_respite_timer will override.")),
                 ("arena_1v1_healkit_skill_bonus_cap", new Property<double>(150, "the maximum effective skill bonus applied from a healing kit during arena 1v1 events.")),
                 ("arena_1v1_healkit_restoration_bonus_cap", new Property<double>(1.5, "the maximum effective restoration bonus applied from a healing kit during arena 1v1 events.")),
-                ("dungeoncontrol_capturescore_mod", new Property<double>(1.0, "modifies the score needed to capture a dungeon in dungeon control, generally used for testing"))
+                ("dungeoncontrol_capturescore_mod", new Property<double>(1.0, "modifies the score needed to capture a dungeon in dungeon control, generally used for testing")),
+                ("force_teleport_materialization_duration", new Property<double>(10.0, "the number of seconds after teleporting that a player should force materialize"))
                 
                 );
 
