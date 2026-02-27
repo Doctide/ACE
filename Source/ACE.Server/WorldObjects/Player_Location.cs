@@ -677,7 +677,7 @@ namespace ACE.Server.WorldObjects
             {
                 var secondsSinceMaterializing = Time.GetUnixTime() - LastTeleportEndTimestamp;
                 var RECENT_TELEPORT_THRESHOLD = PropertyManager.GetDouble("recent_teleport_threshold").Item;
-                return secondsSinceMaterializing < RECENT_TELEPORT_THRESHOLD && !Teleporting;
+                return secondsSinceMaterializing < RECENT_TELEPORT_THRESHOLD;
             }
         }
 
@@ -689,9 +689,14 @@ namespace ACE.Server.WorldObjects
             var fixLoc = Sanctuary ?? new Position(0xA9B40019, 84, 7.1f, 94, 0, 0, -0.0784591f, 0.996917f);
 
             // prevent teleporting if already teleporting, unless the new location is to your sanctuary (death while in portal space)
+            if (Teleporting && !_newPosition.Equals(fixLoc))
+            {
+                Session.Network.EnqueueSend(new GameEventWeenieError(Session, WeenieError.YoureTooBusy));
+                return;
+            }
+
             // prevent teleporting after exiting portal space if it's within the recent teleport threshold
-            // prevent pk timer active recalls
-            if ((Teleporting && !_newPosition.Equals(fixLoc)) || BlockTeleportFromThreshold || PKTimerActive)
+            if (BlockTeleportFromThreshold)
             {
                 Session.Network.EnqueueSend(new GameEventWeenieError(Session, WeenieError.YoureTooBusy));
                 return;
