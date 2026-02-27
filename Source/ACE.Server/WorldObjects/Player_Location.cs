@@ -672,6 +672,15 @@ namespace ACE.Server.WorldObjects
 
         public double TeleportMaterializedDuration => PropertyManager.GetDouble("force_teleport_materialization_duration").Item;
 
+        public bool BlockTeleportFromThreshold {
+            get
+            {
+                var secondsSinceMaterializing = Time.GetUnixTime() - LastTeleportEndTimestamp;
+                var RECENT_TELEPORT_THRESHOLD = PropertyManager.GetDouble("recent_teleport_threshold").Item;
+                return secondsSinceMaterializing < RECENT_TELEPORT_THRESHOLD && !Teleporting;
+            }
+        }
+
         /// <summary>
         /// This is not thread-safe. Consider using WorldManager.ThreadSafeTeleport() instead if you're calling this from a multi-threaded subsection.
         /// </summary>
@@ -679,8 +688,10 @@ namespace ACE.Server.WorldObjects
         {
             var fixLoc = Sanctuary ?? new Position(0xA9B40019, 84, 7.1f, 94, 0, 0, -0.0784591f, 0.996917f);
 
-            // prevent teleporting if already teleporting, unless it's to your sanctuary (death while in portal space)
-            if (Teleporting && !_newPosition.Equals(fixLoc))
+            // prevent teleporting if already teleporting, unless the new location is to your sanctuary (death while in portal space)
+            // prevent teleporting after exiting portal space if it's within the recent teleport threshold
+            // prevent pk timer active recalls
+            if ((Teleporting && !_newPosition.Equals(fixLoc)) || BlockTeleportFromThreshold || PKTimerActive)
             {
                 Session.Network.EnqueueSend(new GameEventWeenieError(Session, WeenieError.YoureTooBusy));
                 return;
@@ -869,7 +880,7 @@ namespace ACE.Server.WorldObjects
 
         public void DoPreTeleportHide()
         {
-            if (Teleporting) return;
+            if (Teleporting || BlockTeleportFromThreshold) return;
             PlayParticleEffect(PlayScript.Hide, Guid);
         }
 
@@ -899,6 +910,9 @@ namespace ACE.Server.WorldObjects
 
         public void OnTeleportComplete()
         {
+            if (!Teleporting)
+                return;
+
             if (CurrentLandblock != null && !CurrentLandblock.CreateWorldObjectsCompleted)
             {
                 // If the critical landblock resources haven't been loaded yet, we keep the player in the pink bubble state
@@ -939,6 +953,9 @@ namespace ACE.Server.WorldObjects
             // hijacking this for both start/end on portal teleport
             if (LastTeleportStartTimestamp == LastPortalTeleportTimestamp)
                 LastPortalTeleportTimestamp = Time.GetUnixTime();
+
+            // update the teleport end timestamp to keep track of post materialization
+            LastTeleportEndTimestamp = Time.GetUnixTime();
         }
 
         public void SendTeleportedViaMagicMessage(WorldObject itemCaster, Spell spell)
