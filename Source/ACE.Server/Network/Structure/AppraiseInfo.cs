@@ -1,6 +1,5 @@
 using ACE.Common.Extensions;
 using ACE.Database;
-using ACE.DatLoader.Entity;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
@@ -335,7 +334,6 @@ namespace ACE.Server.Network.Structure
             if (wo is BountyContract bc)
             {
                 AddGearLongDescProperties(bc);
-
             }
 
             if (!Success)
