@@ -573,6 +573,7 @@ namespace ACE.Server.WorldObjects
             if (result.IsHighPriorityTarget)
                 CompletePkQuestTasks(PKQuests.PKQuests_BountyPriority);
 
+            /*
             // damage dealt
             if (result.DamageDealt > 0)
                 CompletePkQuestTasks(PKQuests.PKQuests_BountyDamageTotal, (int)result.DamageDealt);
@@ -588,6 +589,7 @@ namespace ACE.Server.WorldObjects
             // damage taken 
             if (result.DamageReceived > 0)
                 CompletePkQuestTask("BOUNTY_TANK_5K", (int)result.DamageReceived);
+            */
         }
     }
 }
