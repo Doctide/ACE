@@ -5,7 +5,6 @@ using ACE.Common.Extensions;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Bounties;
 using ACE.Server.Managers;
-using Newtonsoft.Json;
 
 namespace ACE.Server.WorldObjects;
 
@@ -19,7 +18,7 @@ public partial class Player
         {
             if (_bountyInformation == null)
             {
-                _bountyInformation = this.LoadBountyInformation();
+                _bountyInformation = this.LoadSerialized<BountyInformation>(ACE.Entity.Enum.Properties.PropertyString.BountyInformationsSerialized);
             }
             return _bountyInformation;
         }
@@ -27,7 +26,7 @@ public partial class Player
 
     private void SaveBountyInformation()
     {
-        this.SaveBountyInformation(BountyInformation);
+        this.SaveSerialized(ACE.Entity.Enum.Properties.PropertyString.BountyInformationsSerialized, BountyInformation);
     }
 
     private double GetBountyCooldown(uint targetGuid)
