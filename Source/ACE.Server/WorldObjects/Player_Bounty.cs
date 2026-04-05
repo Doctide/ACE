@@ -149,7 +149,6 @@ namespace ACE.Server.WorldObjects
                 bountyTarget.RemoveProperty(ACE.Entity.Enum.Properties.PropertyString.BountyPriorityOwnerName);
 
                 RemoveBountyContract((uint)contract.BountyTargetGuid);
-                BountyManager.RemoveHighPriorityTarget((uint)contract.BountyTargetGuid);
                 BountyEndTimestamp = Time.GetUnixTime();
 
                 SendDelayedNpcResponse(npc, $"You have successfully turned in your bounty for player \"{bountyTarget.Name}\".");
@@ -251,7 +250,6 @@ namespace ACE.Server.WorldObjects
                 player.SetProperty(ACE.Entity.Enum.Properties.PropertyInt.BountyPriorityTargetRewardAmount, rewardAmount);
                 player.SetProperty(ACE.Entity.Enum.Properties.PropertyInt.BountyPriorityCurrency, (int)BountyContract.BountyWopCurrencyWcid);
                 player.SetProperty(ACE.Entity.Enum.Properties.PropertyString.BountyPriorityOwnerName, Name);
-                BountyManager.AddHighPriorityTarget(player.Guid.Full, rewardAmount, BountyContract.BountyWopCurrencyWcid, player.Name, Name);
 
                 SendDelayedNpcResponse(npc, $"You have successfully turned in your Writ of Pursuit for player \"{player.Name}\" with a reward amount of {wopRewardsString}.");
                 return true;

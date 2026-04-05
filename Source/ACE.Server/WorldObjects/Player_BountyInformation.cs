@@ -114,7 +114,7 @@ public partial class Player
         var isNewUnique = info.UniqueBountyTargets.Add(targetGuid);
 
         // high priority
-        var isHighPriorityTarget = BountyManager.IsHighPriorityTarget(bountyTarget);
+        var isHighPriorityTarget = contract.IsHighPriorityTarget;
 
         if (isHighPriorityTarget)
         {

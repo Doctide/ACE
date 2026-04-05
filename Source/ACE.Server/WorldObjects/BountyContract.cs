@@ -30,6 +30,30 @@ namespace ACE.Server.WorldObjects
         public static uint BountyLocationCurrencyWcid => (uint)PropertyManager.GetLong("bounty_location_currency_wcid").Item; 
         public static Weenie BountyLocationCurrencyWeenie => DatabaseManager.World.GetOrThrowCachedWeenie(BountyLocationCurrencyWcid);
 
+        public IPlayer BountyTarget
+        {
+            get
+            {
+                if (!BountyTargetGuid.HasValue)
+                    throw new InvalidOperationException("BountyTargetGuid is missing");
+
+                return PlayerManager.FindByGuid(new ObjectGuid((uint)BountyTargetGuid.Value));
+            }
+        }
+
+        public bool IsHighPriorityTarget => BountyTarget?.GetProperty(PropertyBool.IsBountyHighPriorityTarget) ?? false;
+        public string PriorityOwnerName =>
+            BountyTarget.GetProperty(PropertyString.BountyPriorityOwnerName)
+            ?? throw new InvalidOperationException("BountyOwnerName is missing");
+
+        public int PriorityCurrency =>
+            BountyTarget.GetProperty(PropertyInt.BountyPriorityCurrency)
+            ?? throw new InvalidOperationException("BountyPriorityCurrency is missing");
+
+        public int PriorityRewardAmount =>
+            BountyTarget.GetProperty(PropertyInt.BountyPriorityTargetRewardAmount)
+            ?? throw new InvalidOperationException("BountyPriorityTargetRewardAmount is missing");
+
         public BountyContract(Weenie weenie, ObjectGuid guid) : base(weenie, guid)
         {
             SetEphemeralValues();
@@ -40,9 +64,7 @@ namespace ACE.Server.WorldObjects
             SetEphemeralValues();
         }
 
-        private void SetEphemeralValues()
-        {
-        }
+        private void SetEphemeralValues() { }
 
         public static bool IsBountySystemEnabled => PropertyManager.GetBool("bounty_system_enabled").Item;
         public static bool IsWritOfPursuitEnabled => PropertyManager.GetBool("writ_of_pursuit_enabled").Item;
@@ -89,36 +111,38 @@ namespace ACE.Server.WorldObjects
 
         public void UpdateUiEffects(Player owner)
         {
-            if (!BountyTargetGuid.HasValue)
-                return;
-
-            if (IsBountyExpired)
+            try
             {
-                SetUiEffect(owner, ACE.Entity.Enum.UiEffects.Undef, $"{Name} has expired. Turn it in to a Bounty Collector and possibly receive some compensation.");
-                return;
-            }
-
-            if (IsBountyCompleted)
-            {
-                SetUiEffect(owner, ACE.Entity.Enum.UiEffects.Frost);
-                return;
-            }
-
-            if (IsWritOfPursuitEnabled)
-            {
-                var highPriorityTarget = BountyManager.IsHighPriorityTarget((uint)BountyTargetGuid);
-
-                if (highPriorityTarget)
+                if (IsBountyExpired)
                 {
-
-                    SetUiEffect(owner, ACE.Entity.Enum.UiEffects.Magical);
+                    SetUiEffect(owner, ACE.Entity.Enum.UiEffects.Undef, $"{Name} has expired. Turn it in to a Bounty Collector and possibly receive some compensation.");
                     return;
                 }
-            }
 
-            if (UiEffects != ACE.Entity.Enum.UiEffects.Fire)
+                if (IsBountyCompleted)
+                {
+                    SetUiEffect(owner, ACE.Entity.Enum.UiEffects.Frost);
+                    return;
+                }
+
+                if (IsWritOfPursuitEnabled)
+                {
+                    if (IsHighPriorityTarget)
+                    {
+                        SetUiEffect(owner, ACE.Entity.Enum.UiEffects.Magical);
+                        return;
+                    }
+                }
+
+                if (UiEffects != ACE.Entity.Enum.UiEffects.Fire)
+                {
+                    SetUiEffect(owner, ACE.Entity.Enum.UiEffects.Fire);
+                    return;
+                }
+
+            } catch (Exception ex)
             {
-                SetUiEffect(owner, ACE.Entity.Enum.UiEffects.Fire);
+                log.Error($"Error in UpdateUiEffects: {ex}");
                 return;
             }
         }
@@ -203,15 +227,7 @@ namespace ACE.Server.WorldObjects
                         return;
                     }
 
-                    IPlayer bountyTarget = PlayerManager.GetOnlinePlayer(new ObjectGuid((uint)BountyTargetGuid));
-
-                    bountyTarget ??= PlayerManager.GetOfflinePlayer(new ObjectGuid((uint)BountyTargetGuid));
-
-                    if (bountyTarget == null)
-                    {
-                        player.SendBountyMessage("The bounty contract has invalid target information. This likely means the target has deleted their character. Please contact an admin if you believe this is in error.");
-                        return;
-                    }
+                    IPlayer bountyTarget = BountyTarget;
 
                     var name = bountyTarget.Name;
                     var isOffline = false;
@@ -286,23 +302,23 @@ namespace ACE.Server.WorldObjects
                     return "The bounty contract has invalid target information. Please contact an admin if you believe this is in error.";
 
                 var longDesc = "";
-                var name = BountyOwnerName;
+                var targetName = BountyTarget.Name;
 
                 var bountyLocationCurrencyWeenie = BountyLocationCurrencyWeenie;
 
-                if (BountyManager.TryGetHighPriorityTarget((uint)BountyTargetGuid, out var target))
+                if (IsHighPriorityTarget)
                 {
-                    var priorityOwnerName = target.OwnerName;
-                    var priorityCurrency = target.RewardCurrencyWcid;
-                    var priorityRewardAmount = target.RewardAmount;
-                    var priortyRewardStringAmount = DatabaseManager.World.GetOrThrowCachedWeenie((uint)priorityCurrency).BuildAmountString((long)priorityRewardAmount);
+                    var priorityOwnerName = PriorityOwnerName;
+                    var priorityCurrency = PriorityCurrency;
+                    var priorityRewardAmount = PriorityRewardAmount;
+                    var priortyRewardStringAmount = DatabaseManager.World.GetOrThrowCachedWeenie((uint)priorityCurrency).BuildAmountString(priorityRewardAmount);
                     longDesc += $"This contract is a high priority target assigned by {priorityOwnerName}. They are rewarding {priortyRewardStringAmount} for completing this contract.\n\n";
                     longDesc += $"Multiple people may be competing for a reward on this contract, only the first person to complete a contract for this target is rewarded.\n\n";
                 }
 
                 if (IsBountyCompleted)
                 {
-                    longDesc += $"The bounty contract for {name} has been completed and is awaiting turn in. Please turn in the bounty contract to the bounty NPC to receive your rewards.\n";
+                    longDesc += $"The bounty contract for {targetName} has been completed and is awaiting turn in. Please turn in the bounty contract to the bounty NPC to receive your rewards.\n";
                     longDesc += $"\nContract Time Remaining: {BountyContractTimeRemainingString}\n";
                     return longDesc;
                 }
@@ -311,7 +327,7 @@ namespace ACE.Server.WorldObjects
                 longDesc += $"Use this Bounty Contract to reveal the location of the bounty target. Beware, it will cost you {bountyLocationCurrencyWeenie.BuildAmountString(locationAmountRequirement)}!\n\n";
 
                 var timeRemaining = BountyContractTimeRemainingString;
-                longDesc += $"Bounty Target Name: {name}\n";
+                longDesc += $"Bounty Target Name: {targetName}\n";
                 longDesc += $"\nContract Time Remaining: {timeRemaining}\n";
                 return longDesc;
             } catch (Exception ex)
