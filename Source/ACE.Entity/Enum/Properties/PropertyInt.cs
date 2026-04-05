@@ -656,6 +656,7 @@ namespace ACE.Entity.Enum.Properties
         BountyLastAppraisedTimeStamp = 20004,
         BountyPriorityTargetRewardAmount = 20007,
         BountyPriorityCurrency = 20008,
+        PlayerKillStreak = 20009,
     }
 
     public static class PropertyIntExtensions

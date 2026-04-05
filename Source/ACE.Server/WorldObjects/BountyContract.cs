@@ -54,6 +54,10 @@ namespace ACE.Server.WorldObjects
             BountyTarget.GetProperty(PropertyInt.BountyPriorityTargetRewardAmount)
             ?? throw new InvalidOperationException("BountyPriorityTargetRewardAmount is missing");
 
+        public int KillStreak =>
+            BountyTarget.GetProperty(PropertyInt.PlayerKillStreak)
+            ?? 0;
+
         public BountyContract(Weenie weenie, ObjectGuid guid) : base(weenie, guid)
         {
             SetEphemeralValues();
@@ -314,6 +318,12 @@ namespace ACE.Server.WorldObjects
                     var priortyRewardStringAmount = DatabaseManager.World.GetOrThrowCachedWeenie((uint)priorityCurrency).BuildAmountString(priorityRewardAmount);
                     longDesc += $"This contract is a high priority target assigned by {priorityOwnerName}. They are rewarding {priortyRewardStringAmount} for completing this contract.\n\n";
                     longDesc += $"Multiple people may be competing for a reward on this contract, only the first person to complete a contract for this target is rewarded.\n\n";
+                }
+
+                var killStreakMinimum = PropertyManager.GetLong("bounty_kill_streak_minimum").Item;
+                if (KillStreak > killStreakMinimum)
+                {
+                    longDesc += $"This target is currently on a kill streak of {KillStreak}. This means they have killed {KillStreak} players without dying. Bounty targets on kill streaks are often more dangerous and may be worth more to hunt down.\n\n";
                 }
 
                 if (IsBountyCompleted)

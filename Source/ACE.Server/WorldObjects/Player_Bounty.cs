@@ -11,6 +11,7 @@ using ACE.Server.Entity.Actions;
 using ACE.Server.Entity.PKQuests;
 using ACE.Server.Factories;
 using ACE.Server.Managers;
+using ACE.Server.Network.GameMessages;
 using ACE.Server.Network.GameMessages.Messages;
 
 namespace ACE.Server.WorldObjects
@@ -368,6 +369,14 @@ namespace ACE.Server.WorldObjects
                         }
                     });
 
+                var killStreak = bountyTarget.PlayerKillStreak;
+                var killStreakMinimum = PropertyManager.GetLong("bounty_kill_streak_minimum").Item;
+
+                if (killStreak > killStreakMinimum)
+                {
+                    PlayerManager.BroadcastToAll(new GameMessageSystemChat($"{bountyTarget.Name} is currently on FIRE with a kill streak of {killStreak}! they have been targeted in a bounty contract!", ChatMessageType.WorldBroadcast));
+                }
+
                 return true;        
             }
             catch (Exception ex)
@@ -417,24 +426,38 @@ namespace ACE.Server.WorldObjects
                 weight *= 2; 
             }
 
+            var bountyWeightExponent = PropertyManager.GetDouble("bounty_weight_exponent").Item;
+            var bountyWeightMultiplier = PropertyManager.GetDouble("bounty_weight_multiplier").Item;
+            var bountyWeightMaxStackScale = PropertyManager.GetDouble("bounty_weight_maxstack_scale").Item;
+
+            bountyWeightMultiplier = Math.Max(0, bountyWeightMultiplier);
+            bountyWeightMaxStackScale = Math.Clamp(bountyWeightMaxStackScale, 0.01, 1.0);
+            bountyWeightExponent = Math.Clamp(bountyWeightExponent, 0.25, 1.0);
+
             if (p.BountyPriorityTargetRewardAmount.HasValue)
             {
-                var bountyWeightExponent = PropertyManager.GetDouble("bounty_weight_exponent").Item;
-                var bountyWeightMultiplier = PropertyManager.GetDouble("bounty_weight_multiplier").Item;
-                bountyWeightMultiplier = Math.Max(0, bountyWeightMultiplier);
-
                 var wopCurrencyWeenie = BountyContract.BountyWopCurrencyWeenie;
                 var rewardAmount = p.BountyPriorityTargetRewardAmount.Value;
                 var maxStack = wopCurrencyWeenie.GetMaxStackSize();
                 if (maxStack <= 0)
                     maxStack = 1;
-                var normalized = rewardAmount / (double)maxStack;
-                normalized = Math.Min(normalized, 1.0);
 
-                if (bountyWeightExponent <= 0)
-                    bountyWeightExponent = 0.75;
+                var effectiveMaxStack = Math.Max(1, maxStack * bountyWeightMaxStackScale);
 
-                bountyWeightExponent = Math.Clamp(bountyWeightExponent, 0.25, 1.0);
+                var normalized = rewardAmount / effectiveMaxStack;
+                normalized = Math.Clamp(normalized, 0.0, 1.0);
+
+                weight += Math.Pow(normalized, bountyWeightExponent) * bountyWeightMultiplier;
+            }
+
+            var killStreak = p.PlayerKillStreak;
+            var killStreakMinimum = PropertyManager.GetLong("bounty_kill_streak_minimum").Item;
+
+            if (killStreak > killStreakMinimum)
+            {
+                var normalized = (killStreak - killStreakMinimum) / (double)Math.Max(1, killStreakMinimum);
+                normalized = Math.Clamp(normalized, 0.0, 1.0);
+
                 weight += Math.Pow(normalized, bountyWeightExponent) * bountyWeightMultiplier;
             }
 

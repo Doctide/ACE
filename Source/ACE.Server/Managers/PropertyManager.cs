@@ -681,6 +681,7 @@ namespace ACE.Server.Managers
                 ("bounty_cooldown_expiration_time", new Property<long>(0, "the amount of time in minutes for a bounty hunter's cooldown penalty")),
                 ("bounty_cooldown_target_expiration_time", new Property<long>(30, "the amount of time in minutes for a bounty target's cooldown penalty")),
                 ("bounty_minimum_player_level", new Property<long>(150, "the minimum player level that a bounty can be assigned to")),
+                ("bounty_kill_streak_minimum", new Property<long>(4, "the minimum killstreak count a player must have before being added to high priority bounties")),
                 ("pk_bounty_timer", new Property<long>(120, "the number of seconds where a player cannot perform certain actions (ie. teleporting) after encountering a bounty hunter")),
                 ("bounty_currency_wcid", new Property<long>(1000003, "the WCID for the type of item used for the bounty currency (DEFAULT: is Phial Of Tears)")),
                 ("bounty_currency_return_amount", new Property<long>(1, "the amount of bounty currency to return for expired turn-ins)")),
@@ -818,7 +819,8 @@ namespace ACE.Server.Managers
                 ("force_teleport_materialization_duration", new Property<double>(10.0, "the number of seconds after teleporting that a player should force materialize")),
                 ("bounty_last_location_duration", new Property<double>(30.0, "the number of seconds before a player can use the bounty contract's location finder again")),
                 ("bounty_weight_exponent", new Property<double>(0.75, "bounty weight tuning for selecting targets. More random selections when closer to 0.1, higher priority selections when closer to 1.0 for higher priority target selections")),
-                ("bounty_weight_multiplier", new Property<double>(20.0, "bounty weight multiplier tuning, use in conjunction with bounty_weight_exponent")),
+                ("bounty_weight_multiplier", new Property<double>(50.0, "bounty weight multiplier tuning, use in conjunction with bounty_weight_exponent")),
+                ("bounty_weight_maxstack_scale", new Property<double>(0.2, "bounty weight max stack scale tuning this is used to apply an effective max stack")),
                 ("recent_teleport_threshold", new Property<double>(3.0, "the number of seconds after materializing that a player can teleport again"))
                 
                 );

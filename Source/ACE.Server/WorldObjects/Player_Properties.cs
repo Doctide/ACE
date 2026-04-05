@@ -1631,5 +1631,11 @@ namespace ACE.Server.WorldObjects
             get => GetProperty(PropertyInt.BountyPriorityCurrency);
             set { if (value == null) RemoveProperty(PropertyInt.BountyPriorityCurrency); else SetProperty(PropertyInt.BountyPriorityCurrency, value.Value); }
         }
+
+        public int PlayerKillStreak
+        {
+            get => GetProperty(PropertyInt.PlayerKillStreak) ?? 0;
+            set { if (value == 0) RemoveProperty(PropertyInt.PlayerKillStreak); else SetProperty(PropertyInt.PlayerKillStreak, value); }
+        }
     }
 }
