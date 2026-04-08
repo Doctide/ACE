@@ -129,6 +129,8 @@ namespace ACE.Server.WorldObjects
 
             TownControlTick();
 
+            BountyTick(currentUnixTime);
+
             if (IsArenaObserver)
             {
                 if(!ArenaLocation.IsArenaLandblock(Location?.Landblock ?? 0))

@@ -3466,10 +3466,9 @@ namespace ACE.Server.WorldObjects
 
                         target.EmoteManager.ExecuteEmoteSet(emoteResult, this);
 
-                        if (!CheckBountyContractTurnIns(target, itemToGive) || !CheckBountyPurchase(target, itemToGive) || !CheckWritOfPursuit(target, itemToGive))
-                            return;
-
-                        itemToGive.Destroy();
+                        // maybe in the future make a global transaction state machine to handle any type of custom transactions not just bounty hardcoded
+                        var result = CheckBountyTransactions(target, itemToGive);
+                        HandleTransactionResult(result, target, itemToGive);
                     }
 
                 }

@@ -140,10 +140,6 @@ namespace ACE.Server.WorldObjects
                 {
                     pkPlayer.CompletePkQuestTasks(PKQuests.PKQuests_KillAnywhere);
 
-                    //Bounty Kills
-                    if (BountyContract.IsBountySystemEnabled)
-                       pkPlayer.TryMarkBountyComplete(Guid.Full);
-
                     switch (Location.Landblock)
                     {
                         case 0xF76B:
@@ -201,6 +197,14 @@ namespace ACE.Server.WorldObjects
                             
                             break;
                     }
+
+                    // kill streaks
+                    pkPlayer.PlayerKillStreak++;
+
+                    //Bounty Kills
+                    if (BountyContract.IsBountySystemEnabled)
+                       pkPlayer.MarkBountyComplete(this, topDamager.TotalDamage, pkPlayer.Health.MaxValue, pkPlayer.Health.Current);
+
                 }
             }
             else if (IsPKLiteDeath(topDamager))
@@ -251,11 +255,18 @@ namespace ACE.Server.WorldObjects
             NumDeaths++;
             suicideInProgress = false;
 
+            if (PlayerKillStreak > PropertyManager.GetLong("bounty_kill_streak_minimum").Item && topDamager != null)
+            {
+                PlayerManager.BroadcastToAll(new GameMessageSystemChat($"{Name}'s kill streak of {PlayerKillStreak} has been ended by {topDamager.Name}!", ChatMessageType.WorldBroadcast));
+            }
+
+            PlayerKillStreak = 0; // reset kill streak on death
+
             // todo: since we are going to be using 'time since Player last died to an OlthoiPlayer'
             // as a factor in slag generation, this will eventually be moved to after the slag generation
 
             //if (topDamager != null && topDamager.IsOlthoiPlayer)
-                //OlthoiLootTimestamp = (int)Time.GetUnixTime();
+            //OlthoiLootTimestamp = (int)Time.GetUnixTime();
 
             if (CombatMode == CombatMode.Magic && MagicState.IsCasting)
                 FailCast(false);

@@ -69,8 +69,7 @@ namespace ACE.Server.WorldObjects
                 if (BountyContract.IsBountySystemEnabled)
                 {
                     if (worldObject is Player player)
-                        if (TryGetBountyContract(player.Guid.Full, out _))
-                            player.UpdatePKTimer();
+                        TryMarkHunterTarget(this, player);
                 }
 
                 foreach (var wieldedItem in creature.EquippedObjects.Values)
