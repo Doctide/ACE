@@ -1,8 +1,6 @@
 using System;
 using ACE.Common;
 using ACE.Database;
-using ACE.DatLoader;
-using ACE.DatLoader.FileTypes;
 using ACE.Entity;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
@@ -275,8 +273,6 @@ namespace ACE.Server.WorldObjects
                     return;
                 }
 
-                var animTime = DatManager.PortalDat.ReadFromDat<MotionTable>(player.MotionTableId).GetAnimationLength(MotionCommand.ScanHorizon);
-
                 var action = () =>
                 {
                     if (!BountyTargetGuid.HasValue)
@@ -310,10 +306,9 @@ namespace ACE.Server.WorldObjects
                         player.SendBountyMessage($"{name} is currently online. Current location: {location}.");
 
                     BountyContractLastLocationTimestamp = Time.GetUnixTime();
-                    return;
                 };
 
-                player.ApplyConsumable(MotionCommand.ScanHorizon, action, animTime);
+                player.ApplyBountyContract(action);
             }
             catch (Exception ex)
             {

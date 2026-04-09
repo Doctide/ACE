@@ -149,11 +149,15 @@ public partial class Player
             KillStreak = (uint)killStreakCount,
             RepeatCount = repeatCount,
             DailyHighPriorityCount = info.TotalDailyHighPriorityBountiesCompleted,
-            DamageDealt = (uint)contract.BountyTargetDamageDealt,
-            DamageReceived = (uint)contract.BountyOwnerDamageReceived,
             CountLast30Min = GetBountiesCompletedInLastMinutes(30),
             CountLast60Min = GetBountiesCompletedInLastMinutes(60),
             CountLast90Min = GetBountiesCompletedInLastMinutes(90)
+
+            /*
+            // TODO uncomment this once Damage stats have been implemented
+            DamageDealt = (uint)contract.BountyTargetDamageDealt,
+            DamageReceived = (uint)contract.BountyOwnerDamageReceived,
+            */
         };
     }
 
