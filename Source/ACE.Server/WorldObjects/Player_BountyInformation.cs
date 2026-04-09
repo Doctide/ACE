@@ -89,6 +89,7 @@ public partial class Player
             info.BountyCompletionTimestamps.RemoveAt(0);
 
         // damage dealt
+        /* TODO: damage tracking must be fixed
         if (contract.BountyTargetDamageDealt.HasValue && contract.BountyOwnerDamageReceived.HasValue)
         {
             info.TotalDamageDealtToBountyTargets += (uint)contract.BountyTargetDamageDealt;
@@ -102,6 +103,7 @@ public partial class Player
 
             targetInfo.TotalDamageReceived += (uint)contract.BountyTargetDamageDealt;
         }
+        */
 
         // repeat count
         if (info.RepeatKillCounts.TryGetValue(targetGuid, out var repeatCount))

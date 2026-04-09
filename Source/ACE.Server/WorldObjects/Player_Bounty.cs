@@ -216,7 +216,7 @@ namespace ACE.Server.WorldObjects
                     return BountyTransactionResult.Consume;
                 }
 
-                if (contract.State != BountyContract.BountyState.Completed)
+                if (!contract.IsCompleted)
                 {
                     SendDelayedNpcResponse(npc, "Your bounty contract is not completed yet. Keep hunting!");
                     return BountyTransactionResult.Return;
@@ -671,14 +671,18 @@ namespace ACE.Server.WorldObjects
             if (contract.IsBountyExpired)
                 return;
 
-            if (contract.State != BountyContract.BountyState.Active)
+            if (!contract.IsActive)
                 return;
 
             contract.SetState(BountyContract.BountyState.Completed, this);
 
+            /// TODO: fix damage tracking, the current method is not accurate
+            /*
             contract.BountyTargetDamageDealt = Math.Floor(damageDealt);
             contract.BountyOwnerRemainingHealthPercentage = GetPercentageRemaining(maxHealth, currentHealth, 1);
             contract.BountyOwnerDamageReceived = Math.Floor(maxHealth - currentHealth);
+            */
+
             contract.BountyKillStreakCount = killStreak;
 
             TryAddCompletedBountyContract(contract);

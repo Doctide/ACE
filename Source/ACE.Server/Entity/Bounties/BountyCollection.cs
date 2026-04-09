@@ -30,7 +30,7 @@ namespace ACE.Server.Entity.Bounties
                     continue;
                 }
 
-                if (contract.State == BountyContract.BountyState.Pending)
+                if (contract.IsPending)
                 {
                     owner.TryRemoveFromInventoryWithNetworking(contract.Guid.Full, out _, Player.RemoveFromInventoryAction.ConsumeItem);
                     continue;
@@ -61,13 +61,13 @@ namespace ACE.Server.Entity.Bounties
             if (!_contracts.TryGetValue(targetGuid, out var c))
                 return false;
 
-            if (c.IsBountyExpired && c.State != BountyContract.BountyState.Expired)
+            if (c.IsBountyExpired && !c.IsExpiredState)
             {
                 c.SetState(BountyContract.BountyState.Expired, owner);
                 return false;
             }
 
-            if (c.State != BountyContract.BountyState.Active)
+            if (!c.IsActive)
                 return false;
 
             contract = c;
@@ -78,7 +78,7 @@ namespace ACE.Server.Entity.Bounties
 
         public bool AddBountyContract(uint targetGuid, BountyContract contract)
         {
-            if (contract.State == BountyContract.BountyState.Pending)
+            if (contract.IsPending)
             {
                 return false;
             }
@@ -100,7 +100,7 @@ namespace ACE.Server.Entity.Bounties
             if (!_contracts.TryGetValue(targetGuid, out var contract))
                 return false;
 
-            if (contract.State != BountyContract.BountyState.Active)
+            if (!contract.IsActive)
                 return false;
 
             contract.SetState(BountyContract.BountyState.Completed, owner);
@@ -112,7 +112,7 @@ namespace ACE.Server.Entity.Bounties
             if (!_contracts.TryGetValue(targetGuid, out var contract))
                 return false;
 
-            if (contract.State == BountyContract.BountyState.Expired)
+            if (contract.IsExpiredState)
                 return false;
 
             contract.SetState(BountyContract.BountyState.Expired, owner);
@@ -155,7 +155,7 @@ namespace ACE.Server.Entity.Bounties
                 }
 
                 // remove contracts that are in pending (should never happen except for migration cases)
-                if (contract.State == BountyContract.BountyState.Pending)
+                if (contract.IsPending)
                 {
                     _contracts.Remove(targetGuid);
 
@@ -169,7 +169,7 @@ namespace ACE.Server.Entity.Bounties
                 }
 
                 // expire contracts that are past their expiration time
-                var wasExpired = contract.State == BountyContract.BountyState.Expired;
+                var wasExpired = contract.IsExpiredState;
 
                 if (contract.IsBountyExpired && !wasExpired)
                 {
