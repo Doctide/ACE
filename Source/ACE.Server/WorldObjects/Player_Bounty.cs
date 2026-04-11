@@ -555,16 +555,6 @@ namespace ACE.Server.WorldObjects
                 SendDelayedNpcResponse(npc,
                     $"A new bounty for player \"{bountyTarget.Name}\" has been assigned to you. A bounty contract has been added to your inventory.");
 
-                var killStreak = bountyTarget.PlayerKillStreak;
-                var killStreakMinimum = PropertyManager.GetLong("bounty_kill_streak_minimum").Item;
-
-                if (killStreak > killStreakMinimum)
-                {
-                    PlayerManager.BroadcastToAll(new GameMessageSystemChat(
-                        $"{bountyTarget.Name} is currently on FIRE with a kill streak of {killStreak}! they have been targeted in a bounty contract!",
-                        ChatMessageType.WorldBroadcast));
-                }
-
                 return BountyTransactionResult.Consume;
             }
             catch (Exception ex)
@@ -675,14 +665,6 @@ namespace ACE.Server.WorldObjects
                 return;
 
             contract.SetState(BountyContract.BountyState.Completed, this);
-
-            /// TODO: fix damage tracking, the current method is not accurate
-            /*
-            contract.BountyTargetDamageDealt = Math.Floor(damageDealt);
-            contract.BountyOwnerRemainingHealthPercentage = GetPercentageRemaining(maxHealth, currentHealth, 1);
-            contract.BountyOwnerDamageReceived = Math.Floor(maxHealth - currentHealth);
-            */
-
             contract.BountyKillStreakCount = killStreak;
 
             TryAddCompletedBountyContract(contract);
@@ -808,24 +790,6 @@ namespace ACE.Server.WorldObjects
                 if (result.KillStreak >= 5) CompletePkQuestTask("BOUNTY_STREAKBREAKER_5", 1);
                 if (result.KillStreak >= 10) CompletePkQuestTask("BOUNTY_STREAKBREAKER_10", 1);
             }
-
-            /*
-            // damage dealt
-            if (result.DamageDealt > 0)
-                CompletePkQuestTasks(PKQuests.PKQuests_BountyDamageTotal, (int)result.DamageDealt);
-
-            // single contract damage dealt
-            if (result.DamageDealt >= 2000)
-                CompletePkQuestTask("BOUNTY_DAMAGE_SINGLE_2K", 1);
-
-            // dealt more than twice the damage received
-            if (result.DamageReceived > 0 && result.DamageDealt >= result.DamageReceived * 2)
-                CompletePkQuestTask("BOUNTY_EFFICIENT", 1);
-
-            // damage taken 
-            if (result.DamageReceived > 0)
-                CompletePkQuestTask("BOUNTY_TANK_5K", (int)result.DamageReceived);
-            */
         }
     }
 }

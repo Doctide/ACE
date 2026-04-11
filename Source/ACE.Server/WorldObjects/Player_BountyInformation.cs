@@ -88,23 +88,6 @@ public partial class Player
         if (info.BountyCompletionTimestamps.Count > 30)
             info.BountyCompletionTimestamps.RemoveAt(0);
 
-        // damage dealt
-        /* TODO: damage tracking must be fixed
-        if (contract.BountyTargetDamageDealt.HasValue && contract.BountyOwnerDamageReceived.HasValue)
-        {
-            info.TotalDamageDealtToBountyTargets += (uint)contract.BountyTargetDamageDealt;
-            info.TotalDamageReceived += (uint)contract.BountyOwnerDamageReceived;
-            info.TotalDailyDamageDealt += (uint)contract.BountyTargetDamageDealt;
-
-            if (info.DailyTargetDamageDealt.TryGetValue(targetGuid, out var dmg))
-                info.DailyTargetDamageDealt[targetGuid] = dmg + (uint)contract.BountyTargetDamageDealt;
-            else
-                info.DailyTargetDamageDealt[targetGuid] = (uint)contract.BountyTargetDamageDealt;
-
-            targetInfo.TotalDamageReceived += (uint)contract.BountyTargetDamageDealt;
-        }
-        */
-
         // repeat count
         if (info.RepeatKillCounts.TryGetValue(targetGuid, out var repeatCount))
             repeatCount++;
@@ -152,12 +135,6 @@ public partial class Player
             CountLast30Min = GetBountiesCompletedInLastMinutes(30),
             CountLast60Min = GetBountiesCompletedInLastMinutes(60),
             CountLast90Min = GetBountiesCompletedInLastMinutes(90)
-
-            /*
-            // TODO uncomment this once Damage stats have been implemented
-            DamageDealt = (uint)contract.BountyTargetDamageDealt,
-            DamageReceived = (uint)contract.BountyOwnerDamageReceived,
-            */
         };
     }
 

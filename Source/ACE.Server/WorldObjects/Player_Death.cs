@@ -199,7 +199,15 @@ namespace ACE.Server.WorldObjects
                     }
 
                     // kill streaks
-                    pkPlayer.PlayerKillStreak++;
+                    var killStreak = ++pkPlayer.PlayerKillStreak;
+
+                    var killStreakMinimum = PropertyManager.GetLong("bounty_kill_streak_minimum").Item;
+                    var shouldBroadcastKillstreak = PropertyManager.GetBool("broadcast_kill_streak").Item;
+
+                    if (shouldBroadcastKillstreak && (killStreak > killStreakMinimum))
+                    {
+                        PlayerManager.BroadcastToAll(new GameMessageSystemChat($"{pkPlayer.Name} currently has a kill streak of {killStreak}! is there anyone that can stop him?", ChatMessageType.WorldBroadcast));
+                    }
 
                     //Bounty Kills
                     if (BountyContract.IsBountySystemEnabled)
@@ -255,7 +263,10 @@ namespace ACE.Server.WorldObjects
             NumDeaths++;
             suicideInProgress = false;
 
-            if (PlayerKillStreak > PropertyManager.GetLong("bounty_kill_streak_minimum").Item && topDamager != null)
+            var killStreakMinimum = PropertyManager.GetLong("bounty_kill_streak_minimum").Item;
+            var shouldBroadcastKillstreak = PropertyManager.GetBool("broadcast_kill_streak").Item;
+
+            if (shouldBroadcastKillstreak && (PlayerKillStreak > killStreakMinimum) && topDamager != null)
             {
                 PlayerManager.BroadcastToAll(new GameMessageSystemChat($"{Name}'s kill streak of {PlayerKillStreak} has been ended by {topDamager.Name}!", ChatMessageType.WorldBroadcast));
             }
