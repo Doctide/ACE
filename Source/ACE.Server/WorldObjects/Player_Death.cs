@@ -209,6 +209,13 @@ namespace ACE.Server.WorldObjects
                         PlayerManager.BroadcastToAll(new GameMessageSystemChat($"{pkPlayer.Name} currently has a kill streak of {killStreak}! is there anyone that can stop him?", ChatMessageType.WorldBroadcast));
                     }
 
+                    if (shouldBroadcastKillstreak && (PlayerKillStreak > killStreakMinimum))
+                    {
+                        PlayerManager.BroadcastToAll(new GameMessageSystemChat($"{Name}'s kill streak of {PlayerKillStreak} has been ended by {pkPlayer.Name}!", ChatMessageType.WorldBroadcast));
+                    }
+
+                    PlayerKillStreak = 0; // reset kill streak on death
+
                     //Bounty Kills
                     if (BountyContract.IsBountySystemEnabled)
                        pkPlayer.MarkBountyComplete(this, topDamager.TotalDamage, pkPlayer.Health.MaxValue, pkPlayer.Health.Current);
@@ -262,16 +269,6 @@ namespace ACE.Server.WorldObjects
             UpdateVital(Health, 0);
             NumDeaths++;
             suicideInProgress = false;
-
-            var killStreakMinimum = PropertyManager.GetLong("bounty_kill_streak_minimum").Item;
-            var shouldBroadcastKillstreak = PropertyManager.GetBool("broadcast_kill_streak").Item;
-
-            if (shouldBroadcastKillstreak && (PlayerKillStreak > killStreakMinimum) && topDamager != null)
-            {
-                PlayerManager.BroadcastToAll(new GameMessageSystemChat($"{Name}'s kill streak of {PlayerKillStreak} has been ended by {topDamager.Name}!", ChatMessageType.WorldBroadcast));
-            }
-
-            PlayerKillStreak = 0; // reset kill streak on death
 
             // todo: since we are going to be using 'time since Player last died to an OlthoiPlayer'
             // as a factor in slag generation, this will eventually be moved to after the slag generation
