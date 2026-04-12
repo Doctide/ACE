@@ -193,7 +193,7 @@ namespace ACE.Server.WorldObjects
                     return BountyTransactionResult.Return;
                 }
 
-                if (!contract.BountyTargetGuid.HasValue)
+                if (!contract.BountyTargetGuid.HasValue || contract.IsPending || contract.IsDestroyed)
                 {
                     SendDelayedNpcResponse(npc, "This contract is invalid and cannot be turned in. Destroying the contract now.");
                     return BountyTransactionResult.Consume;
@@ -548,7 +548,7 @@ namespace ACE.Server.WorldObjects
 
                 if (!TryAddActiveBountyContract(contract))
                 {
-                    TryRemoveFromInventoryWithNetworking(contract.Guid.Full, out _, Player.RemoveFromInventoryAction.ConsumeItem);
+                    TryConsumeFromInventoryWithNetworking(contract);
                     return BountyTransactionResult.Return;
                 }
 
