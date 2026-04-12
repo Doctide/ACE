@@ -149,6 +149,9 @@ namespace ACE.Server.WorldObjects
                 if (!IsBountyExpirationsEnabled || !BountyCreationTimestamp.HasValue)
                     return false;
 
+                if (IsExpiredState)
+                    return true;
+
                 var creationTime = Time.GetDateTimeFromTimestamp(BountyCreationTimestamp.Value);
                 return DateTime.UtcNow > creationTime + _bountyExpirationDuration;
             }
