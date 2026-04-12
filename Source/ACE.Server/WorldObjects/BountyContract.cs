@@ -240,6 +240,13 @@ namespace ACE.Server.WorldObjects
                     return;
                 }
 
+                if (IsPending)
+                {
+                    player.SendBountyMessage("This bounty contract is in an invalid state, it cannot be used, destroying it now!");
+                    player.TryConsumeFromInventoryWithNetworking(this);
+                    return;
+                }
+
                 if (IsBountyExpired)
                 {
                     player.SendBountyMessage("This bounty contract has expired, please turn it in to the Bounty Collector to receive compensation!");
