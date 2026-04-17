@@ -30,7 +30,7 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         /// <param name="positionType">PositionType to be teleported to</param>
         /// <returns>true on success (position is set) false otherwise</returns>
-        public bool TeleToPosition(PositionType positionType)
+        public bool TeleToPosition(PositionType positionType, bool force = true)
         {
             var position = GetPosition(positionType);
 
@@ -39,7 +39,7 @@ namespace ACE.Server.WorldObjects
                 var teleportDest = new Position(position);
                 AdjustDungeon(teleportDest);
 
-                Teleport(teleportDest);
+                Teleport(teleportDest, force);
                 return true;
             }
 
@@ -128,7 +128,7 @@ namespace ACE.Server.WorldObjects
                     Session.Network.EnqueueSend(new GameEventWeenieError(Session, WeenieError.YouHaveMovedTooFar));
                     return;
                 }
-                Teleport(house.SlumLord.Location);
+                Teleport(house.SlumLord.Location, force: false);
             });
 
             actionChain.EnqueueChain();
@@ -202,7 +202,7 @@ namespace ACE.Server.WorldObjects
                     return;
                 }
 
-                Teleport(Sanctuary);
+                Teleport(Sanctuary, force: false);
             });
 
             lifestoneChain.EnqueueChain();
@@ -268,7 +268,7 @@ namespace ACE.Server.WorldObjects
                     return;
                 }
 
-                Teleport(MarketplaceDrop);
+                Teleport(MarketplaceDrop, force: false);
             });
 
             // Set the chain to run
@@ -344,7 +344,7 @@ namespace ACE.Server.WorldObjects
                 if (!VerifyRecallAllegianceHometown())
                     return;
 
-                Teleport(Allegiance.Sanctuary);
+                Teleport(Allegiance.Sanctuary, force: false);
             });
 
             actionChain.EnqueueChain();
@@ -441,7 +441,7 @@ namespace ACE.Server.WorldObjects
                 if (allegianceHouse == null)
                     return;
 
-                Teleport(allegianceHouse.SlumLord.Location);
+                Teleport(allegianceHouse.SlumLord.Location, force: false);
             }); 
 
             actionChain.EnqueueChain();
@@ -560,7 +560,7 @@ namespace ACE.Server.WorldObjects
                 var rng = ThreadSafeRandom.Next(0, pkArenaLocs.Count - 1);
                 var loc = pkArenaLocs[rng];
 
-                Teleport(loc);
+                Teleport(loc, force: false);
             });
 
             actionChain.EnqueueChain();
@@ -644,7 +644,7 @@ namespace ACE.Server.WorldObjects
                 var rng = ThreadSafeRandom.Next(0, pklArenaLocs.Count - 1);
                 var loc = pklArenaLocs[rng];
 
-                Teleport(loc);
+                Teleport(loc, force: false);
             });
 
             actionChain.EnqueueChain();
@@ -670,40 +670,57 @@ namespace ACE.Server.WorldObjects
 
         public bool ForceTeleportMaterialization => PropertyManager.GetBool("force_teleport_materialization").Item;
 
-        public double TeleportMaterializedDuration => PropertyManager.GetDouble("force_teleport_materialization_duration").Item;
+        public double ForceTeleportMaterializationDuration => PropertyManager.GetDouble("force_teleport_materialization_duration").Item;
 
-        public bool BlockTeleportFromThreshold {
+        public bool IsRecentTeleportPreventionEnabled = PropertyManager.GetBool("recent_teleport_prevention").Item;
+
+        public bool BlockRecentTeleport {
             get
             {
+                if (!IsRecentTeleportPreventionEnabled)
+                    return false;
+
                 var secondsSinceMaterializing = Time.GetUnixTime() - LastTeleportEndTimestamp;
                 var RECENT_TELEPORT_THRESHOLD = PropertyManager.GetDouble("recent_teleport_threshold").Item;
                 return secondsSinceMaterializing < RECENT_TELEPORT_THRESHOLD;
             }
         }
 
+        public void ForceMaterializeForTeleport(ulong teleportId)
+        {
+            if (!ForceTeleportMaterialization)
+                return;
+
+            // if we are dead and teleporting, use normal teleport flow
+            if (IsInDeathProcess)
+                return;
+
+            var actionChain = new ActionChain();
+            actionChain.AddDelaySeconds(ForceTeleportMaterializationDuration);
+            actionChain.AddAction(this, () =>  OnTeleportComplete(teleportId));
+            actionChain.EnqueueChain();
+        }
+
+        /// <summary>
+        /// This is a teleport instance id guard, this prevents overlapping async action calls to force materialize. We only want one OnTeleportComplete to call per teleport
+        /// </summary>
+        private ulong _teleportId = 0;
+        public ulong CurrentTeleportId => _teleportId;
+
         /// <summary>
         /// This is not thread-safe. Consider using WorldManager.ThreadSafeTeleport() instead if you're calling this from a multi-threaded subsection.
         /// </summary>
-        public void Teleport(Position _newPosition, bool fromPortal = false, bool force = false)
+        public void Teleport(Position _newPosition, bool fromPortal = false, bool force = true)
         {
             if(!ValidateTeleport(_newPosition, force))
             {
-                Session.Network.EnqueueSend(new GameEventWeenieError(Session, WeenieError.YoureTooBusy));
+                Session.Network.EnqueueSend(new GameEventWeenieError(Session, WeenieError.YouHaveBeenTeleportedTooRecently));
                 return;
             }
 
             var newPosition = new Position(_newPosition);
             //newPosition.PositionZ += 0.005f;
             newPosition.PositionZ += 0.005f * (ObjScale ?? 1.0f);
-
-            // Force a materialization when teleporting
-            if (ForceTeleportMaterialization)
-            {
-                var actionChain = new ActionChain();
-                actionChain.AddDelaySeconds(TeleportMaterializedDuration);
-                actionChain.AddAction(this, OnTeleportComplete);
-                actionChain.EnqueueChain();
-            }
 
             //Console.WriteLine($"{Name}.Teleport() - Sending to {newPosition.ToLOCString()}");
 
@@ -714,15 +731,17 @@ namespace ACE.Server.WorldObjects
 
             if (currentFogColor.HasValue && currentFogColor != EnvironChangeType.Clear && !LandblockManager.GlobalFogColor.HasValue)
             {
-                var delayTelport = new ActionChain();
-                delayTelport.AddAction(this, () => ClearFogColor());
-                delayTelport.AddDelaySeconds(1);
-                delayTelport.AddAction(this, () => WorldManager.ThreadSafeTeleport(this, _newPosition, force: true));
+                var delayTeleport = new ActionChain();
+                delayTeleport.AddAction(this, () => ClearFogColor());
+                delayTeleport.AddDelaySeconds(1);
+                delayTeleport.AddAction(this, () => WorldManager.ThreadSafeTeleport(this, _newPosition));
 
-                delayTelport.EnqueueChain();
+                delayTeleport.EnqueueChain();
 
                 return;
             }
+
+            var currentTeleportId = ++_teleportId;
 
             Teleporting = true;
             LastTeleportTime = DateTime.UtcNow;
@@ -799,7 +818,7 @@ namespace ACE.Server.WorldObjects
                                 QuestManager.Erase("EnterBattleDungeon");
                             }
 
-                            Teleport(Sanctuary, force: true);
+                            Teleport(Sanctuary);
                             return;
                         }
 
@@ -808,7 +827,7 @@ namespace ACE.Server.WorldObjects
                         {
                             this.Session.Network.EnqueueSend(new GameMessageSystemChat($"You have attempted to enter a zerg restricted area.  This area is currently only open to clans who are whitelisted for town control to prevent players from breaking allegiance in order to exceed clan capacity restrictions.  Please contact an admin to get your clan whitelisted for entry.", ChatMessageType.Broadcast));
 
-                            Teleport(Sanctuary, force: true);
+                            Teleport(Sanctuary);
                             return;
                         }
 
@@ -822,7 +841,7 @@ namespace ACE.Server.WorldObjects
                             {
                                 this.Session.Network.EnqueueSend(new GameMessageSystemChat($"Your allegiance has already reached it's maximum number of entrants to this World Boss event. ", ChatMessageType.Broadcast));
 
-                                Teleport(Sanctuary, force: true);
+                                Teleport(Sanctuary);
                                 return;
                             }
                             else
@@ -843,7 +862,7 @@ namespace ACE.Server.WorldObjects
                         //The player has no allegiance, disallow entry
                         this.Session.Network.EnqueueSend(new GameMessageSystemChat($"You have attempted to enter a zerg restricted area.  Unfortunately you are not a member of an allegiance and are unable to enter this area to prevent abuse by players who break allegiance to exceed the clan capacity limitations.  You have been redirected to your lifestone.", ChatMessageType.Broadcast));
 
-                        Teleport(Sanctuary, force: true);
+                        Teleport(Sanctuary);
                         return;
                     }
                 }
@@ -871,10 +890,16 @@ namespace ACE.Server.WorldObjects
             {
                 ArenaManager.ExitArenaObserverMode(this);
             }            
+
+            // Force a materialization when teleporting
+            ForceMaterializeForTeleport(currentTeleportId);
         }
 
         private bool ValidateTeleport(Position newPosition, bool force)
         {
+            if (!IsRecentTeleportPreventionEnabled)
+                return true;
+
             if (force)
                 return true;
 
@@ -883,7 +908,7 @@ namespace ACE.Server.WorldObjects
                 return false;
 
             // prevent teleporting after exiting portal space if it's within the recent teleport 
-            if (BlockTeleportFromThreshold)
+            if (BlockRecentTeleport)
                 return false;
 
             return true;
@@ -891,7 +916,7 @@ namespace ACE.Server.WorldObjects
 
         public void DoPreTeleportHide()
         {
-            if (Teleporting || BlockTeleportFromThreshold) return;
+            if (Teleporting || BlockRecentTeleport) return;
             PlayParticleEffect(PlayScript.Hide, Guid);
         }
 
@@ -919,8 +944,11 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public double? LastPortalTeleportTimestampError;
 
-        public void OnTeleportComplete()
+        public void OnTeleportComplete(ulong teleportId)
         {
+            if (teleportId != _teleportId)
+                return;
+
             if (!Teleporting)
                 return;
 
@@ -930,7 +958,7 @@ namespace ACE.Server.WorldObjects
                 // We'll check periodically to see when it's safe to let them materialize in
                 var actionChain = new ActionChain();
                 actionChain.AddDelaySeconds(0.1);
-                actionChain.AddAction(this, OnTeleportComplete);
+                actionChain.AddAction(this, () => OnTeleportComplete(teleportId));
                 actionChain.EnqueueChain();
                 return;
             }
@@ -942,7 +970,7 @@ namespace ACE.Server.WorldObjects
             {
                 var delayTelport = new ActionChain();
                 delayTelport.AddDelaySeconds(1);
-                delayTelport.AddAction(this, OnTeleportComplete);
+                delayTelport.AddAction(this, () => OnTeleportComplete(teleportId));
                 delayTelport.EnqueueChain();
                 return;
             }
@@ -979,6 +1007,9 @@ namespace ACE.Server.WorldObjects
 
         public void SendTeleportedViaMagicMessage(WorldObject itemCaster, Spell spell)
         {
+            if (BlockRecentTeleport)
+                return;
+
             if (itemCaster == null || itemCaster is Gem)
                 Session.Network.EnqueueSend(new GameMessageSystemChat($"You have been teleported.", ChatMessageType.Magic));
             else if (this != itemCaster && !(itemCaster is Gem) && !(itemCaster is Switch) && !(itemCaster.GetProperty(PropertyBool.NpcInteractsSilently) ?? false))

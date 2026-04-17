@@ -522,7 +522,7 @@ namespace ACE.Server.WorldObjects
 
         public bool ForceLogoutMaterialization => PropertyManager.GetBool("force_logout_materialization").Item;
 
-        public double MaterializedLogoutDuration => PropertyManager.GetDouble("force_logout_materialization_duration").Item;
+        public double ForceLogoutMaterializationDuration => PropertyManager.GetDouble("force_logout_materialization_duration").Item;
 
         public enum LogoutState
         {
@@ -582,7 +582,7 @@ namespace ACE.Server.WorldObjects
             PKLogout = true;
 
             if (ForceLogoutMaterialization)
-                OnTeleportComplete();
+                OnTeleportComplete(CurrentTeleportId);
 
             IsFrozen = true;
             EnqueueBroadcastPhysicsState();
@@ -610,7 +610,7 @@ namespace ACE.Server.WorldObjects
 
             if (Teleporting && MaterializedLogoutState is LogoutState.Pending)
             {
-                ForceMaterialize();
+                ForceMaterializeForLogoff();
                 return false;
             }
 
@@ -618,11 +618,11 @@ namespace ACE.Server.WorldObjects
             return true;
         }
 
-        public void ForceMaterialize()
+        public void ForceMaterializeForLogoff()
         {
             MaterializedLogoutState = LogoutState.InProgress;
-            OnTeleportComplete();
-            LogoffTimestamp = Time.GetFutureUnixTime(MaterializedLogoutDuration);
+            OnTeleportComplete(CurrentTeleportId);
+            LogoffTimestamp = Time.GetFutureUnixTime(ForceLogoutMaterializationDuration);
             PlayerManager.AddPlayerToLogoffQueue(this);
         }
 

@@ -456,7 +456,7 @@ namespace ACE.Server.WorldObjects
                 });
 
                 teleportChain.EnqueueChain();
-            }), force: true);
+            }));
         }
 
         public bool suicideInProgress;

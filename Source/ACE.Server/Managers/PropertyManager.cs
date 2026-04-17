@@ -626,6 +626,7 @@ namespace ACE.Server.Managers
                 ("tinker_lotto_enabled", new Property<bool>(false, "enables the tinkering lotto feature")),
                 ("force_logout_materialization", new Property<bool>(true, "forces players to materialize on logut")),
                 ("force_teleport_materialization", new Property<bool>(true, "forces players to materialize on teleport")),
+                ("force_login_materialization", new Property<bool>(true, "forces players to materialize on login")),
                 ("disable_pvp_cleave", new Property<bool>(false, "disables melee cleave attacks from targeting players")),
                 ("disable_world_bosses", new Property<bool>(true, "disables spawning of world bosses")),
                 ("jump_cancels_melee", new Property<bool>(false, "cancels melee attacks when the target is jumping")),
@@ -638,6 +639,7 @@ namespace ACE.Server.Managers
                 ("bounty_allow_logged_out", new Property<bool>(false, "enable this to allow logged out characters to be valid bounties")),
                 ("bounty_pk_timer_active_enabled", new Property<bool>(true, "enable this for custom bounty pk timer active check")),
                 ("bounty_expirations_enabled", new Property<bool>(true, "enable this to allow bounties to expire")),
+                ("recent_teleport_prevention", new Property<bool>(true, "enable this to prevent players from teleporting too frequently")),
                 ("broadcast_kill_streak", new Property<bool>(true, "enable this to broadcast kill streak messages")),
                 ("local_server", new Property<bool>(false, "Do not enable on live servers! Enable this to allow for server behavior to change as necessary for testing envrionments.")),
                 ("world_closed", new Property<bool>(false, "enable this to startup world as a closed to players world"))
@@ -818,6 +820,7 @@ namespace ACE.Server.Managers
                 ("dungeoncontrol_capturescore_mod", new Property<double>(1.0, "modifies the score needed to capture a dungeon in dungeon control, generally used for testing")),
                 ("force_logout_materialization_duration", new Property<double>(1, "the number of seconds a player should materialize for before logging out")),
                 ("force_teleport_materialization_duration", new Property<double>(10.0, "the number of seconds after teleporting that a player should force materialize")),
+                ("force_login_materialization_duration", new Property<double>(10.0, "the number of seconds after logging in that a player should force materialize")),
                 ("bounty_last_location_duration", new Property<double>(30.0, "the number of seconds before a player can use the bounty contract's location finder again")),
                 ("bounty_weight_exponent", new Property<double>(0.75, "bounty weight tuning for selecting targets. More random selections when closer to 0.1, higher priority selections when closer to 1.0 for higher priority target selections")),
                 ("bounty_weight_multiplier", new Property<double>(50.0, "bounty weight multiplier tuning, use in conjunction with bounty_weight_exponent")),
