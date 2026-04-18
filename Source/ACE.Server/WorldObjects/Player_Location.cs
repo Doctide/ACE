@@ -746,6 +746,7 @@ namespace ACE.Server.WorldObjects
             Teleporting = true;
             LastTeleportTime = DateTime.UtcNow;
             LastTeleportStartTimestamp = Time.GetUnixTime();
+            OnTeleportCompleteFailureRetry = 0;
 
             if (fromPortal)
                 LastPortalTeleportTimestamp = LastTeleportStartTimestamp;
@@ -944,6 +945,8 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public double? LastPortalTeleportTimestampError;
 
+        private uint OnTeleportCompleteFailureRetry = 0;
+
         public void OnTeleportComplete(ulong teleportId)
         {
             if (teleportId != _teleportId)
@@ -968,13 +971,62 @@ namespace ACE.Server.WorldObjects
             //If player hasn't been in the portal for at least 3 seconds before exiting
             if (LastTeleportStartTimestamp > Time.GetUnixTime(DateTime.UtcNow.AddSeconds(-1*minPortalspaceSeconds)))
             {
-                var delayTelport = new ActionChain();
-                delayTelport.AddDelaySeconds(1);
-                delayTelport.AddAction(this, () => OnTeleportComplete(teleportId));
-                delayTelport.EnqueueChain();
+                var delayTeleport = new ActionChain();
+                delayTeleport.AddDelaySeconds(1);
+                delayTeleport.AddAction(this, () => OnTeleportComplete(teleportId));
+                delayTeleport.EnqueueChain();
                 return;
             }
-            
+
+            // Update our location to wherever the physics says we ended up. This takes care of slightly invalid destination locations that both the server and client physics will autocorrect.
+            var physicsPos = PhysicsObj.Position;
+            var newPos = physicsPos.ACEPosition();
+
+            // If validating physics-derived position fails, log a warning and attempt to use the Sanctuary position as a fallback if not logging out, otherwise just exit.
+            if (physicsPos.ObjCellID == 0)
+            {
+                log.Warn($"[TELEPORT BLOCKED] Invalid ACE position for {Name}");
+                log.Warn($"  PhysicsObjCellID: {physicsPos.ObjCellID}");
+                log.Warn($"  PhysicsCell: {newPos.Cell}");
+                log.Warn($"  PhysicsPos: {newPos.Pos}");
+                log.Warn($"  CurrentPosCell: {Location.Cell}");
+                log.Warn($"  CurrentPos: {Location.Pos}");
+                log.Warn($"  Teleporting: {Teleporting}");
+                log.Warn($"  IsDeath: {IsInDeathProcess}");
+                log.Warn($"  LoggingOut: {IsLoggingOut}");
+
+                if (IsLoggingOut)
+                {
+                    Teleporting = false;
+                    OnTeleportCompleteFailureRetry = 0;
+
+                    var msg = $"{Name} is logging out while teleporting and ended up with invalid position data.";
+                    log.Warn(msg);
+                    SendMessage(msg, ChatMessageType.System);
+                    return;
+                }
+
+                // If we've exhausted retries to get a valid position, teleport the player to their sancutary as a last resort
+                if (OnTeleportCompleteFailureRetry >= 3)
+                {
+                    var fixLoc = Sanctuary ?? Instantiation ?? new Position(0xA9B40019, 84, 7.1f, 94, 0, 0, -0.0784591f, 0.996917f);
+                    var delayTeleport = new ActionChain();
+                    delayTeleport.AddDelaySeconds(1);
+                    delayTeleport.AddAction(this, () => WorldManager.ThreadSafeTeleport(this, fixLoc));
+                    delayTeleport.EnqueueChain();
+                    OnTeleportCompleteFailureRetry = 0;
+                    return;
+                } else
+                {
+                    var actionChain = new ActionChain();
+                    actionChain.AddDelaySeconds(0.5);
+                    actionChain.AddAction(this, () => OnTeleportComplete(teleportId));
+                    actionChain.EnqueueChain();
+                    OnTeleportCompleteFailureRetry++;
+                    return;
+                }
+            }
+
             // set materialize physics state
             // this takes the player from pink bubbles -> fully materialized
             if (CloakStatus != CloakStatus.On)
@@ -983,18 +1035,20 @@ namespace ACE.Server.WorldObjects
             IgnoreCollisions = false;
             Hidden = false;
             Teleporting = false;
-            Location = PhysicsObj.Position.ACEPosition(); // Update our location to wherever the physics says we ended up. This takes care of slightly invalid destination locations that both the server and client physics will autocorrect.
+
+
             SnapPos = Location;
             PrevMovementUpdateMaxSpeed = 0.0f;
             LastPlayerInitiatedActionTime = DateTime.UtcNow;
-
+            Location = newPos; 
             LastPlayerMovementCheckTime = DateTime.UtcNow;
             HasPerformedActionsSinceLastMovementUpdate = false;
+            OnTeleportCompleteFailureRetry = 0;
 
             CheckMonsters();
             CheckHouse();
             CheckVisibleBounties();
-
+            CheckMaterializedLogoutState();
             EnqueueBroadcastPhysicsState();
 
             // hijacking this for both start/end on portal teleport
@@ -1003,6 +1057,20 @@ namespace ACE.Server.WorldObjects
 
             // update the teleport end timestamp to keep track of post materialization
             LastTeleportEndTimestamp = Time.GetUnixTime();
+        }
+
+        private void CheckMaterializedLogoutState()
+        {
+            // If a character is stuck in a materialized progress state after materializing, try to add them to logoff queue to get them unstuck.
+            if (MaterializedLogoutState == LogoutState.InProgress)
+            {
+                MaterializedLogoutState = LogoutState.Ready;
+                if (!PlayerManager.IsInLogoffQueue(this))
+                {
+                    LogoffTimestamp = Time.GetUnixTime();
+                    PlayerManager.AddPlayerToLogoffQueue(this);
+                }
+            }
         }
 
         public void SendTeleportedViaMagicMessage(WorldObject itemCaster, Spell spell)

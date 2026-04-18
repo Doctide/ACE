@@ -160,7 +160,7 @@ namespace ACE.Server.WorldObjects
 
             // set pink bubble state
             IgnoreCollisions = true; ReportCollisions = false; Hidden = true;
-        }
+         }
 
         private void SetEphemeralValues()
         {
@@ -580,11 +580,8 @@ namespace ACE.Server.WorldObjects
         {
             PkLogoutState = LogoutState.InProgress;
             PKLogout = true;
-
-            if (ForceLogoutMaterialization)
-                OnTeleportComplete(CurrentTeleportId);
-
             IsFrozen = true;
+
             EnqueueBroadcastPhysicsState();
 
             //Session.Network.EnqueueSend(new GameEventWeenieError(Session, WeenieError.YouHaveBeenInPKBattleTooRecently));
@@ -621,7 +618,11 @@ namespace ACE.Server.WorldObjects
         public void ForceMaterializeForLogoff()
         {
             MaterializedLogoutState = LogoutState.InProgress;
-            OnTeleportComplete(CurrentTeleportId);
+
+            _teleportId++;
+
+            OnTeleportComplete(_teleportId);
+
             LogoffTimestamp = Time.GetFutureUnixTime(ForceLogoutMaterializationDuration);
             PlayerManager.AddPlayerToLogoffQueue(this);
         }
