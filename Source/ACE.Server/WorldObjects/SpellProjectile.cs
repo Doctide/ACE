@@ -22,6 +22,8 @@ namespace ACE.Server.WorldObjects
 {
     public class SpellProjectile : WorldObject
     {
+        private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
         public Spell Spell;
         public ProjectileSpellType SpellType { get; set; }
 
@@ -394,414 +396,422 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public float? CalculateDamage(WorldObject source, Creature target, ref bool criticalHit, ref bool critDefended, ref bool overpower)
         {
-            var sourcePlayer = source as Player;
-            var targetPlayer = target as Player;
-
-            if (source == null || !target.IsAlive || target.Invincible)
-                return null;
-
-            // check lifestone protection
-            if (targetPlayer != null && targetPlayer.UnderLifestoneProtection)
+            try
             {
-                if (sourcePlayer != null)
-                    sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat($"The Lifestone's magic protects {targetPlayer.Name} from the attack!", ChatMessageType.Magic));
+                var sourcePlayer = source as Player;
+                var targetPlayer = target as Player;
 
-                targetPlayer.HandleLifestoneProtection();
-                return null;
-            }
-            
-            if (targetPlayer == null)
-            {
-                if (target.IsTownControlBoss)
+                if (source == null || !target.IsAlive || target.Invincible)
+                    return null;
+
+                // check lifestone protection
+                if (targetPlayer != null && targetPlayer.UnderLifestoneProtection)
                 {
-                    //If defender is town control boss and attacker is not a player in PK state, dmg is zero
-                    if (sourcePlayer == null || !sourcePlayer.IsPK)
-                    {
-                        //Don't allow summons or NPKs to damage the town control bosses
-                        return 0.0f;
-                    }
-                    else
-                    {
-                        //Don't allow the owning clan to damage the town control bosses
-                        bool playerOwnsTown = false;
-                        var boss = TownControlBosses.TownControlBossMap[target.WeenieClassId];
-                        var town = TownControl.GetTownById(boss.TownID);
-                        var playerAlleg = AllegianceManager.GetAllegiance(sourcePlayer);
-                        if (playerAlleg != null)
-                        {
-                            var playerMonarchId = playerAlleg.MonarchId;
+                    if (sourcePlayer != null)
+                        sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat($"The Lifestone's magic protects {targetPlayer.Name} from the attack!", ChatMessageType.Magic));
 
-                            if (town.CurrentOwnerID.HasValue && town.CurrentOwnerID.Value == playerMonarchId)
-                            {
-                                playerOwnsTown = true;
-                            }
-                        }
+                    targetPlayer.HandleLifestoneProtection();
+                    return null;
+                }
 
-                        if (playerOwnsTown)
+                if (targetPlayer == null)
+                {
+                    if (target.IsTownControlBoss)
+                    {
+                        //If defender is town control boss and attacker is not a player in PK state, dmg is zero
+                        if (sourcePlayer == null || !sourcePlayer.IsPK)
                         {
+                            //Don't allow summons or NPKs to damage the town control bosses
                             return 0.0f;
                         }
-
-                        //Only allow clans that are whitelisted to damage the Init bosses                        
-                        if (target.IsTownControlInitBoss)
+                        else
                         {
-                            if (playerAlleg == null || !playerAlleg.MonarchId.HasValue || !TownControlAllegiances.IsAllowedAllegiance((int)playerAlleg.MonarchId.Value))
+                            //Don't allow the owning clan to damage the town control bosses
+                            bool playerOwnsTown = false;
+                            var boss = TownControlBosses.TownControlBossMap[target.WeenieClassId];
+                            var town = TownControl.GetTownById(boss.TownID);
+                            var playerAlleg = AllegianceManager.GetAllegiance(sourcePlayer);
+                            if (playerAlleg != null)
+                            {
+                                var playerMonarchId = playerAlleg.MonarchId;
+
+                                if (town.CurrentOwnerID.HasValue && town.CurrentOwnerID.Value == playerMonarchId)
+                                {
+                                    playerOwnsTown = true;
+                                }
+                            }
+
+                            if (playerOwnsTown)
                             {
                                 return 0.0f;
                             }
+
+                            //Only allow clans that are whitelisted to damage the Init bosses                        
+                            if (target.IsTownControlInitBoss)
+                            {
+                                if (playerAlleg == null || !playerAlleg.MonarchId.HasValue || !TownControlAllegiances.IsAllowedAllegiance((int)playerAlleg.MonarchId.Value))
+                                {
+                                    return 0.0f;
+                                }
+                            }
                         }
                     }
-                }
-                else if (WorldBosses.IsWorldBoss(target.WeenieClassId))
-                {
-                    if (sourcePlayer == null || !sourcePlayer.IsPK)
+                    else if (WorldBosses.IsWorldBoss(target.WeenieClassId))
                     {
-                        //Don't allow summons or NPKs to damage a world boss
+                        if (sourcePlayer == null || !sourcePlayer.IsPK)
+                        {
+                            //Don't allow summons or NPKs to damage a world boss
+                            return 0.0f;
+                        }
+                    }
+                    else if (target.IsDungeonControlGuardian && (sourcePlayer == null || !sourcePlayer.IsPK))
+                    {
+                        //Don't allow summons or NPKs to damage a Dungeon Control Guardian
                         return 0.0f;
                     }
                 }
-                else if (target.IsDungeonControlGuardian && (sourcePlayer == null || !sourcePlayer.IsPK))
+
+                //Arenas - If this is an arena landblock
+                //don't allow any dmg except while the event is in a started status and between non-eliminated players
+                bool isArena1v1 = false;
+                if (targetPlayer != null && ArenaLocation.IsArenaLandblock(targetPlayer.Location.Landblock))
                 {
-                    //Don't allow summons or NPKs to damage a Dungeon Control Guardian
-                    return 0.0f;
-                }
-            }
+                    var arenaEvent = ArenaManager.GetArenaEventByLandblock(targetPlayer.Location.Landblock);
+                    if (arenaEvent == null || arenaEvent.Status != 4)
+                    {
+                        return 0.0f;
+                    }
 
-            //Arenas - If this is an arena landblock
-            //don't allow any dmg except while the event is in a started status and between non-eliminated players
-            bool isArena1v1 = false;
-            if (targetPlayer != null && ArenaLocation.IsArenaLandblock(targetPlayer.Location.Landblock))
-            {
-                var arenaEvent = ArenaManager.GetArenaEventByLandblock(targetPlayer.Location.Landblock);
-                if (arenaEvent == null || arenaEvent.Status != 4)
-                {
-                    return 0.0f;
-                }
+                    if (sourcePlayer != null && sourcePlayer.IsArenaObserver)
+                        return 0.0f;
 
-                if (sourcePlayer != null && sourcePlayer.IsArenaObserver)
-                    return 0.0f;
+                    if (arenaEvent.EventType.Equals("tugak") && Spell.IsHarmful && Spell.Id != (uint)SpellId.CurseRavenFury)
+                        return 0.0f;
 
-                if (arenaEvent.EventType.Equals("tugak") && Spell.IsHarmful && Spell.Id != (uint)SpellId.CurseRavenFury)
-                    return 0.0f;
-
-                isArena1v1 = arenaEvent.EventType.Equals("1v1");                    
-            }
-
-            //TODO if this is gauntlet, dont allow pvp dmg
-
-            var critDamageBonus = 0.0f;
-            var weaponCritDamageMod = 1.0f;
-            var weaponResistanceMod = 1.0f;
-            var resistanceMod = 1.0f;
-
-            // life magic
-            var lifeMagicDamage = 0.0f;
-
-            // war/void magic
-            var baseDamage = 0;
-            var skillBonus = 0.0f;
-            var finalDamage = 0.0f;
-
-            var resistanceType = Creature.GetResistanceType(Spell.DamageType);
-
-            var sourceCreature = source as Creature;
-            if (sourceCreature?.Overpower != null || sourcePlayer != null)
-                overpower = Creature.GetOverpower(sourceCreature, target);
-
-            var weapon = ProjectileLauncher;
-
-            var resistSource = IsWeaponSpell ? weapon : source;
-
-            var resisted = source.TryResistSpell(target, Spell, resistSource, true);
-            if (resisted && !overpower)
-                return null;
-
-            CreatureSkill attackSkill = null;
-            if (sourceCreature != null)
-                attackSkill = sourceCreature.GetCreatureSkill(Spell.School);
-
-            // critical hit
-            var criticalChance = GetWeaponMagicCritFrequency(weapon, sourceCreature, attackSkill, target);                        
-
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) < criticalChance)
-            {
-                if (targetPlayer != null && targetPlayer.AugmentationCriticalDefense > 0)
-                {
-                    var criticalDefenseMod = sourcePlayer != null ? 0.05f : 0.25f;
-                    var criticalDefenseChance = targetPlayer.AugmentationCriticalDefense * criticalDefenseMod;
-
-                    if (criticalDefenseChance > ThreadSafeRandom.Next(0.0f, 1.0f))
-                        critDefended = true;
+                    isArena1v1 = arenaEvent.EventType.Equals("1v1");
                 }
 
-                if (!critDefended)
+                //TODO if this is gauntlet, dont allow pvp dmg
+
+                var critDamageBonus = 0.0f;
+                var weaponCritDamageMod = 1.0f;
+                var weaponResistanceMod = 1.0f;
+                var resistanceMod = 1.0f;
+
+                // life magic
+                var lifeMagicDamage = 0.0f;
+
+                // war/void magic
+                var baseDamage = 0;
+                var skillBonus = 0.0f;
+                var finalDamage = 0.0f;
+
+                var resistanceType = Creature.GetResistanceType(Spell.DamageType);
+
+                var sourceCreature = source as Creature;
+                if (sourceCreature?.Overpower != null || sourcePlayer != null)
+                    overpower = Creature.GetOverpower(sourceCreature, target);
+
+                var weapon = ProjectileLauncher;
+
+                var resistSource = IsWeaponSpell ? weapon : source;
+
+                var resisted = source.TryResistSpell(target, Spell, resistSource, true);
+                if (resisted && !overpower)
+                    return null;
+
+                CreatureSkill attackSkill = null;
+                if (sourceCreature != null)
+                    attackSkill = sourceCreature.GetCreatureSkill(Spell.School);
+
+                // critical hit
+                var criticalChance = GetWeaponMagicCritFrequency(weapon, sourceCreature, attackSkill, target);
+
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < criticalChance)
+                {
+                    if (targetPlayer != null && targetPlayer.AugmentationCriticalDefense > 0)
+                    {
+                        var criticalDefenseMod = sourcePlayer != null ? 0.05f : 0.25f;
+                        var criticalDefenseChance = targetPlayer.AugmentationCriticalDefense * criticalDefenseMod;
+
+                        if (criticalDefenseChance > ThreadSafeRandom.Next(0.0f, 1.0f))
+                            critDefended = true;
+                    }
+
+                    if (!critDefended)
+                        criticalHit = true;
+                }
+
+                //all spell projectiles now crit 100% against a logging out target
+                if (targetPlayer != null && (targetPlayer.IsLoggingOut || targetPlayer.PKLogout))
+                {
+                    criticalChance = 1.0f;
                     criticalHit = true;
-            }
-
-            //all spell projectiles now crit 100% against a logging out target
-            if (targetPlayer != null && (targetPlayer.IsLoggingOut || targetPlayer.PKLogout))
-            {
-                criticalChance = 1.0f;
-                criticalHit = true;
-            }
-
-            var absorbMod = GetAbsorbMod(target);
-
-            bool isPVP = sourcePlayer != null && targetPlayer != null;
-
-            //http://acpedia.org/wiki/Announcements_-_2014/01_-_Forces_of_Nature - Aegis is 72% effective in PvP
-            if (isPVP && (target.CombatMode == CombatMode.Melee || target.CombatMode == CombatMode.Missile))
-            {
-                absorbMod = 1 - absorbMod;
-                absorbMod *= 0.72f;
-                absorbMod = 1 - absorbMod;
-            }
-
-            if (isPVP && Spell.IsHarmful)
-                Player.UpdatePKTimers(sourcePlayer, targetPlayer);
-
-            var elementalDamageMod = GetCasterElementalDamageModifier(weapon, sourceCreature, target, Spell.DamageType);
-
-            // Possible 2x + damage bonus for the slayer property
-            var slayerMod = GetWeaponCreatureSlayerModifier(weapon, sourceCreature, target);
-
-            //Gear Creature Slayer Rating - Custom
-            int gearSlayerRating = sourceCreature.GetEquippedItemsCreatureSlayerRatingSum(target.CreatureType ?? ACE.Entity.Enum.CreatureType.Invalid);
-            if (gearSlayerRating > 0)
-            {
-                slayerMod = Creature.AdditiveCombine(slayerMod, Creature.GetPositiveRatingMod(gearSlayerRating));
-            }
-
-            //Nerf human slayer dmg for ring and wall spells
-            if (isPVP && slayerMod > 1f && Spell.School != MagicSchool.LifeMagic)
-            {
-                var spellType = GetProjectileSpellType(Spell.Id);
-                if (spellType == ProjectileSpellType.Ring || spellType == ProjectileSpellType.Wall)
-                    slayerMod = 1f;
-            }
-
-            // life magic projectiles: ie., martyr's hecatomb
-            if (Spell.MetaSpellType == ACE.Entity.Enum.SpellType.LifeProjectile)
-            {
-                lifeMagicDamage = LifeProjectileDamage * Spell.DamageRatio;
-
-                // could life magic projectiles crit?
-                // if so, did they use the same 1.5x formula as war magic, instead of 2.0x?
-                if (criticalHit)
-                {
-                    // verify: CriticalMultiplier only applied to the additional crit damage,
-                    // whereas CD/CDR applied to the total damage (base damage + additional crit damage)
-                    weaponCritDamageMod = GetWeaponCritDamageMod(weapon, sourceCreature, attackSkill, target);
-
-                    critDamageBonus = lifeMagicDamage * 0.5f * weaponCritDamageMod;
                 }
 
-                weaponResistanceMod = GetWeaponResistanceModifier(weapon, sourceCreature, attackSkill, Spell.DamageType);
+                var absorbMod = GetAbsorbMod(target);
 
-                // if attacker/weapon has IgnoreMagicResist directly, do not transfer to spell projectile
-                // only pass if SpellProjectile has it directly, such as 2637 - Invoking Aun Tanua
+                bool isPVP = sourcePlayer != null && targetPlayer != null;
 
-                resistanceMod = (float)Math.Max(0.0f, target.GetResistanceMod(resistanceType, this, null, weaponResistanceMod));
-
-                //Gear Creature Resist Rating - custom
-                int gearCreatureResistRating = target.GetEquippedItemsCreatureResistRatingSum(sourceCreature.CreatureType ?? ACE.Entity.Enum.CreatureType.Invalid);
-                float gearCreatureResistRatingMod = 1.0f;
-                if (gearCreatureResistRating > 0)
+                //http://acpedia.org/wiki/Announcements_-_2014/01_-_Forces_of_Nature - Aegis is 72% effective in PvP
+                if (isPVP && (target.CombatMode == CombatMode.Melee || target.CombatMode == CombatMode.Missile))
                 {
-                    gearCreatureResistRatingMod = Creature.GetNegativeRatingMod(gearCreatureResistRating);
+                    absorbMod = 1 - absorbMod;
+                    absorbMod *= 0.72f;
+                    absorbMod = 1 - absorbMod;
                 }
 
-                finalDamage = (lifeMagicDamage + critDamageBonus) * elementalDamageMod * slayerMod * resistanceMod * absorbMod * gearCreatureResistRatingMod;
-            }
-            // war/void magic projectiles
-            else
-            {
-                if (criticalHit)
+                if (isPVP && Spell.IsHarmful)
+                    Player.UpdatePKTimers(sourcePlayer, targetPlayer);
+
+                var elementalDamageMod = GetCasterElementalDamageModifier(weapon, sourceCreature, target, Spell.DamageType);
+
+                // Possible 2x + damage bonus for the slayer property
+                var slayerMod = GetWeaponCreatureSlayerModifier(weapon, sourceCreature, target);
+
+                //Gear Creature Slayer Rating - Custom
+                int gearSlayerRating = sourceCreature.GetEquippedItemsCreatureSlayerRatingSum(target.CreatureType ?? ACE.Entity.Enum.CreatureType.Invalid);
+                if (gearSlayerRating > 0)
                 {
-                    // Original:
-                    // http://acpedia.org/wiki/Announcements_-_2002/08_-_Atonement#Letter_to_the_Players
-
-                    // Critical Strikes: In addition to the skill-based damage bonus, each projectile spell has a 2% chance of causing a critical hit on the target and doing increased damage.
-                    // A magical critical hit is similar in some respects to melee critical hits (although the damage calculation is handled differently).
-                    // While a melee critical hit automatically does twice the maximum damage of the weapon, a magical critical hit will do an additional half the minimum damage of the spell.
-                    // For instance, a magical critical hit from a level 7 spell, which does 110-180 points of damage, would add an additional 55 points of damage to the spell.
-
-                    // Later updated for PvE only:
-
-                    // http://acpedia.org/wiki/Announcements_-_2004/07_-_Treaties_in_Stone#Letter_to_the_Players
-
-                    // Currently when a War Magic spell scores a critical hit, it adds a multiple of the base damage of the spell to a normal damage roll.
-                    // Starting in July, War Magic critical hits will instead add a multiple of the maximum damage of the spell.
-                    // No more crits that do less damage than non-crits!
-
-                    if (isPVP) // PvP: 50% of the MIN damage added to normal damage roll
-                        critDamageBonus = Spell.MinDamage * 0.5f;
-                    else   // PvE: 50% of the MAX damage added to normal damage roll
-                        critDamageBonus = Spell.MaxDamage * 0.5f;
-
-                    // verify: CriticalMultiplier only applied to the additional crit damage,
-                    // whereas CD/CDR applied to the total damage (base damage + additional crit damage)
-                    weaponCritDamageMod = GetWeaponCritDamageMod(weapon, sourceCreature, attackSkill, target);
-
-                    critDamageBonus *= weaponCritDamageMod;
+                    slayerMod = Creature.AdditiveCombine(slayerMod, Creature.GetPositiveRatingMod(gearSlayerRating));
                 }
 
-                /* War Magic skill-based damage bonus
-                 * http://acpedia.org/wiki/Announcements_-_2002/08_-_Atonement#Letter_to_the_Players
-                 */
-                if (sourcePlayer != null)
+                //Nerf human slayer dmg for ring and wall spells
+                if (isPVP && slayerMod > 1f && Spell.School != MagicSchool.LifeMagic)
                 {
-                    var magicSkill = sourcePlayer.GetCreatureSkill(Spell.School).Current;
-
-                    if (magicSkill > Spell.Power)
-                    {
-                        var percentageBonus = (magicSkill - Spell.Power) / 1000.0f;
-
-                        skillBonus = Spell.MinDamage * percentageBonus;
-                    }
+                    var spellType = GetProjectileSpellType(Spell.Id);
+                    if (spellType == ProjectileSpellType.Ring || spellType == ProjectileSpellType.Wall)
+                        slayerMod = 1f;
                 }
 
-                var minDmg = Spell.MinDamage;
-                var spellType = GetProjectileSpellType(Spell.Id);
-                if (isPVP && Spell.School == MagicSchool.WarMagic && (spellType == ProjectileSpellType.Arc || spellType == ProjectileSpellType.Bolt))
+                // life magic projectiles: ie., martyr's hecatomb
+                if (Spell.MetaSpellType == ACE.Entity.Enum.SpellType.LifeProjectile)
                 {
-                    var warVarianceMod = PropertyManager.GetDouble("pvp_dmg_mod_war_variance", 1).Item;
-                    var modifiedVariance = Convert.ToInt32(Math.Round(Spell.Variance * warVarianceMod));
-                    minDmg = Spell.MaxDamage - modifiedVariance;
-                }
+                    lifeMagicDamage = LifeProjectileDamage * Spell.DamageRatio;
 
-                if (isPVP && Spell.School == MagicSchool.VoidMagic && (spellType == ProjectileSpellType.Arc || spellType == ProjectileSpellType.Bolt))
-                {
-                    var voidVarianceMod = PropertyManager.GetDouble("pvp_dmg_mod_void_variance", 1).Item;
-                    var modifiedVariance = Convert.ToInt32(Math.Round(Spell.Variance * voidVarianceMod));
-                    minDmg = Spell.MaxDamage - modifiedVariance;
-                }
-
-                baseDamage = ThreadSafeRandom.Next(minDmg, Spell.MaxDamage);
-
-                weaponResistanceMod = GetWeaponResistanceModifier(weapon, sourceCreature, attackSkill, Spell.DamageType);
-
-                // if attacker/weapon has IgnoreMagicResist directly, do not transfer to spell projectile
-                // only pass if SpellProjectile has it directly, such as 2637 - Invoking Aun Tanua
-
-                resistanceMod = (float)Math.Max(0.0f, target.GetResistanceMod(resistanceType, this, null, weaponResistanceMod));
-
-                //Gear Creature Resist Rating - custom
-                int gearCreatureResistRating = target.GetEquippedItemsCreatureResistRatingSum(sourceCreature.CreatureType ?? ACE.Entity.Enum.CreatureType.Invalid);
-                float gearCreatureResistRatingMod = 1.0f;
-                if (gearCreatureResistRating > 0)
-                {
-                    gearCreatureResistRatingMod = Creature.GetNegativeRatingMod(gearCreatureResistRating);
-                }
-
-                finalDamage = baseDamage + critDamageBonus + skillBonus;
-
-                finalDamage *= elementalDamageMod * slayerMod * resistanceMod * absorbMod * gearCreatureResistRatingMod;
-            }
-
-            // show debug info
-            if (sourceCreature != null && sourceCreature.DebugDamage.HasFlag(Creature.DebugDamageType.Attacker))
-            {
-                ShowInfo(sourceCreature, Spell, attackSkill, criticalChance, criticalHit, critDefended, overpower, weaponCritDamageMod, skillBonus, baseDamage, critDamageBonus, elementalDamageMod, slayerMod, weaponResistanceMod, resistanceMod, absorbMod, LifeProjectileDamage, lifeMagicDamage, finalDamage);
-            }
-            if (target.DebugDamage.HasFlag(Creature.DebugDamageType.Defender))
-            {
-                ShowInfo(target, Spell, attackSkill, criticalChance, criticalHit, critDefended, overpower, weaponCritDamageMod, skillBonus, baseDamage, critDamageBonus, elementalDamageMod, slayerMod, weaponResistanceMod, resistanceMod, absorbMod, LifeProjectileDamage, lifeMagicDamage, finalDamage);
-            }
-
-            //Apply pvp dmg mods for war and void (not including DOTs which are in EnchantmentManager.ApplyDamageTick)
-            float dmgMod = 1;
-            if (sourcePlayer != null && targetPlayer != null)
-            {
-                if (Spell.School == MagicSchool.WarMagic)
-                {
-                    dmgMod = (float)PropertyManager.GetDouble("pvp_dmg_mod_war").Item;
-
-                    if (SpellType == ProjectileSpellType.Streak)
-                        dmgMod = (float)PropertyManager.GetDouble("pvp_dmg_mod_war_streak").Item; // scales war streak damages
-
-                    if (SpellType == ProjectileSpellType.Blast)
-                        dmgMod = (float)PropertyManager.GetDouble("pvp_dmg_mod_war_blast").Item; // scales war blast damages
-
-                    if (criticalHit && weapon.HasImbuedEffect(ImbuedEffectType.CripplingBlow))
-                    {
-                        dmgMod *= (float)PropertyManager.GetDouble("pvp_dmg_mod_war_cb_crit").Item;
-                    }
-
-                    if(weapon.HasImbuedEffect(ImbuedEffectType.CriticalStrike))
-                    {
-                        dmgMod *= (float)PropertyManager.GetDouble("pvp_dmg_mod_war_cs_dmg").Item;
-
-                        if(criticalHit)
-                        {
-                            dmgMod *= (float)PropertyManager.GetDouble("pvp_dmg_mod_war_cs_crit").Item;
-                        }
-                    }
-
-                    finalDamage = finalDamage * dmgMod;
-                }
-                else if (Spell.DamageType == DamageType.Nether)
-                {
-                    dmgMod = (float)PropertyManager.GetDouble("pvp_dmg_mod_void").Item;
-
-                    if (SpellType == ProjectileSpellType.Streak)
-                    {
-                        dmgMod = (float)PropertyManager.GetDouble("pvp_dmg_mod_void_streak").Item; // scales void streak damages
-                    }
-
+                    // could life magic projectiles crit?
+                    // if so, did they use the same 1.5x formula as war magic, instead of 2.0x?
                     if (criticalHit)
                     {
-                        dmgMod *= (float)PropertyManager.GetDouble("pvp_dmg_mod_void_crit").Item;
-                        if (weapon.HasImbuedEffect(ImbuedEffectType.CripplingBlow))
+                        // verify: CriticalMultiplier only applied to the additional crit damage,
+                        // whereas CD/CDR applied to the total damage (base damage + additional crit damage)
+                        weaponCritDamageMod = GetWeaponCritDamageMod(weapon, sourceCreature, attackSkill, target);
+
+                        critDamageBonus = lifeMagicDamage * 0.5f * weaponCritDamageMod;
+                    }
+
+                    weaponResistanceMod = GetWeaponResistanceModifier(weapon, sourceCreature, attackSkill, Spell.DamageType);
+
+                    // if attacker/weapon has IgnoreMagicResist directly, do not transfer to spell projectile
+                    // only pass if SpellProjectile has it directly, such as 2637 - Invoking Aun Tanua
+
+                    resistanceMod = (float)Math.Max(0.0f, target.GetResistanceMod(resistanceType, this, null, weaponResistanceMod));
+
+                    //Gear Creature Resist Rating - custom
+                    int gearCreatureResistRating = target.GetEquippedItemsCreatureResistRatingSum(sourceCreature.CreatureType ?? ACE.Entity.Enum.CreatureType.Invalid);
+                    float gearCreatureResistRatingMod = 1.0f;
+                    if (gearCreatureResistRating > 0)
+                    {
+                        gearCreatureResistRatingMod = Creature.GetNegativeRatingMod(gearCreatureResistRating);
+                    }
+
+                    finalDamage = (lifeMagicDamage + critDamageBonus) * elementalDamageMod * slayerMod * resistanceMod * absorbMod * gearCreatureResistRatingMod;
+                }
+                // war/void magic projectiles
+                else
+                {
+                    if (criticalHit)
+                    {
+                        // Original:
+                        // http://acpedia.org/wiki/Announcements_-_2002/08_-_Atonement#Letter_to_the_Players
+
+                        // Critical Strikes: In addition to the skill-based damage bonus, each projectile spell has a 2% chance of causing a critical hit on the target and doing increased damage.
+                        // A magical critical hit is similar in some respects to melee critical hits (although the damage calculation is handled differently).
+                        // While a melee critical hit automatically does twice the maximum damage of the weapon, a magical critical hit will do an additional half the minimum damage of the spell.
+                        // For instance, a magical critical hit from a level 7 spell, which does 110-180 points of damage, would add an additional 55 points of damage to the spell.
+
+                        // Later updated for PvE only:
+
+                        // http://acpedia.org/wiki/Announcements_-_2004/07_-_Treaties_in_Stone#Letter_to_the_Players
+
+                        // Currently when a War Magic spell scores a critical hit, it adds a multiple of the base damage of the spell to a normal damage roll.
+                        // Starting in July, War Magic critical hits will instead add a multiple of the maximum damage of the spell.
+                        // No more crits that do less damage than non-crits!
+
+                        if (isPVP) // PvP: 50% of the MIN damage added to normal damage roll
+                            critDamageBonus = Spell.MinDamage * 0.5f;
+                        else   // PvE: 50% of the MAX damage added to normal damage roll
+                            critDamageBonus = Spell.MaxDamage * 0.5f;
+
+                        // verify: CriticalMultiplier only applied to the additional crit damage,
+                        // whereas CD/CDR applied to the total damage (base damage + additional crit damage)
+                        weaponCritDamageMod = GetWeaponCritDamageMod(weapon, sourceCreature, attackSkill, target);
+
+                        critDamageBonus *= weaponCritDamageMod;
+                    }
+
+                    /* War Magic skill-based damage bonus
+                     * http://acpedia.org/wiki/Announcements_-_2002/08_-_Atonement#Letter_to_the_Players
+                     */
+                    if (sourcePlayer != null)
+                    {
+                        var magicSkill = sourcePlayer.GetCreatureSkill(Spell.School).Current;
+
+                        if (magicSkill > Spell.Power)
                         {
-                            dmgMod *= (float)PropertyManager.GetDouble("pvp_dmg_mod_void_cb_crit").Item;
+                            var percentageBonus = (magicSkill - Spell.Power) / 1000.0f;
+
+                            skillBonus = Spell.MinDamage * percentageBonus;
                         }
                     }
 
-                    finalDamage = finalDamage * dmgMod;
-                }
-
-                //Apply Arena 1v1 Dmg Mod
-                if (isArena1v1)
-                {
-                    dmgMod = (float)PropertyManager.GetDouble("arena_1v1_global_dmg_mod").Item;
-                    finalDamage = finalDamage * dmgMod;
-                }
-            }
-
-            //For town control, reduce the dmg on the boss based on distance of attacker
-            if (target.IsTownControlConflictBoss && sourcePlayer != null)
-            {
-                var distance = target.Location.DistanceTo(sourcePlayer.Location);
-                if (distance > 15)
-                {
-                    var distanceMod = 0.2f * (20 - distance);
-                    if (distanceMod < 0)
-                        distanceMod = 0;
-
-                    finalDamage = finalDamage * distanceMod;
-                }
-            }
-
-            //Arenas - If this is an arena landblock
-            //track dmg dealt and received
-            if (targetPlayer != null && ArenaLocation.IsArenaLandblock(targetPlayer.Location.Landblock))
-            {
-                var arenaEvent = ArenaManager.GetArenaEventByLandblock(targetPlayer.Location.Landblock);
-                if (arenaEvent != null && arenaEvent.Status == 4 && sourcePlayer != null)
-                {
-                    var attackerArenaPlayer = arenaEvent.Players.FirstOrDefault(x => x.CharacterId == sourcePlayer.Character.Id);
-                    var defenderArenaPlayer = arenaEvent.Players.FirstOrDefault(x => x.CharacterId == targetPlayer.Character.Id);
-
-                    if (attackerArenaPlayer != null && defenderArenaPlayer != null)
+                    var minDmg = Spell.MinDamage;
+                    var spellType = GetProjectileSpellType(Spell.Id);
+                    if (isPVP && Spell.School == MagicSchool.WarMagic && (spellType == ProjectileSpellType.Arc || spellType == ProjectileSpellType.Bolt))
                     {
-                        attackerArenaPlayer.TotalDmgDealt += (uint)Math.Round(finalDamage);
-                        defenderArenaPlayer.TotalDmgReceived += (uint)Math.Round(finalDamage);
+                        var warVarianceMod = PropertyManager.GetDouble("pvp_dmg_mod_war_variance", 1).Item;
+                        var modifiedVariance = Convert.ToInt32(Math.Round(Spell.Variance * warVarianceMod));
+                        minDmg = Spell.MaxDamage - modifiedVariance;
+                    }
+
+                    if (isPVP && Spell.School == MagicSchool.VoidMagic && (spellType == ProjectileSpellType.Arc || spellType == ProjectileSpellType.Bolt))
+                    {
+                        var voidVarianceMod = PropertyManager.GetDouble("pvp_dmg_mod_void_variance", 1).Item;
+                        var modifiedVariance = Convert.ToInt32(Math.Round(Spell.Variance * voidVarianceMod));
+                        minDmg = Spell.MaxDamage - modifiedVariance;
+                    }
+
+                    baseDamage = ThreadSafeRandom.Next(minDmg, Spell.MaxDamage);
+
+                    weaponResistanceMod = GetWeaponResistanceModifier(weapon, sourceCreature, attackSkill, Spell.DamageType);
+
+                    // if attacker/weapon has IgnoreMagicResist directly, do not transfer to spell projectile
+                    // only pass if SpellProjectile has it directly, such as 2637 - Invoking Aun Tanua
+
+                    resistanceMod = (float)Math.Max(0.0f, target.GetResistanceMod(resistanceType, this, null, weaponResistanceMod));
+
+                    //Gear Creature Resist Rating - custom
+                    int gearCreatureResistRating = target.GetEquippedItemsCreatureResistRatingSum(sourceCreature.CreatureType ?? ACE.Entity.Enum.CreatureType.Invalid);
+                    float gearCreatureResistRatingMod = 1.0f;
+                    if (gearCreatureResistRating > 0)
+                    {
+                        gearCreatureResistRatingMod = Creature.GetNegativeRatingMod(gearCreatureResistRating);
+                    }
+
+                    finalDamage = baseDamage + critDamageBonus + skillBonus;
+
+                    finalDamage *= elementalDamageMod * slayerMod * resistanceMod * absorbMod * gearCreatureResistRatingMod;
+                }
+
+                // show debug info
+                if (sourceCreature != null && sourceCreature.DebugDamage.HasFlag(Creature.DebugDamageType.Attacker))
+                {
+                    ShowInfo(sourceCreature, Spell, attackSkill, criticalChance, criticalHit, critDefended, overpower, weaponCritDamageMod, skillBonus, baseDamage, critDamageBonus, elementalDamageMod, slayerMod, weaponResistanceMod, resistanceMod, absorbMod, LifeProjectileDamage, lifeMagicDamage, finalDamage);
+                }
+                if (target.DebugDamage.HasFlag(Creature.DebugDamageType.Defender))
+                {
+                    ShowInfo(target, Spell, attackSkill, criticalChance, criticalHit, critDefended, overpower, weaponCritDamageMod, skillBonus, baseDamage, critDamageBonus, elementalDamageMod, slayerMod, weaponResistanceMod, resistanceMod, absorbMod, LifeProjectileDamage, lifeMagicDamage, finalDamage);
+                }
+
+                //Apply pvp dmg mods for war and void (not including DOTs which are in EnchantmentManager.ApplyDamageTick)
+                float dmgMod = 1;
+                if (sourcePlayer != null && targetPlayer != null)
+                {
+                    if (Spell.School == MagicSchool.WarMagic)
+                    {
+                        dmgMod = (float)PropertyManager.GetDouble("pvp_dmg_mod_war").Item;
+
+                        if (SpellType == ProjectileSpellType.Streak)
+                            dmgMod = (float)PropertyManager.GetDouble("pvp_dmg_mod_war_streak").Item; // scales war streak damages
+
+                        if (SpellType == ProjectileSpellType.Blast)
+                            dmgMod = (float)PropertyManager.GetDouble("pvp_dmg_mod_war_blast").Item; // scales war blast damages
+
+                        if (criticalHit && weapon.HasImbuedEffect(ImbuedEffectType.CripplingBlow))
+                        {
+                            dmgMod *= (float)PropertyManager.GetDouble("pvp_dmg_mod_war_cb_crit").Item;
+                        }
+
+                        if (weapon.HasImbuedEffect(ImbuedEffectType.CriticalStrike))
+                        {
+                            dmgMod *= (float)PropertyManager.GetDouble("pvp_dmg_mod_war_cs_dmg").Item;
+
+                            if (criticalHit)
+                            {
+                                dmgMod *= (float)PropertyManager.GetDouble("pvp_dmg_mod_war_cs_crit").Item;
+                            }
+                        }
+
+                        finalDamage = finalDamage * dmgMod;
+                    }
+                    else if (Spell.DamageType == DamageType.Nether)
+                    {
+                        dmgMod = (float)PropertyManager.GetDouble("pvp_dmg_mod_void").Item;
+
+                        if (SpellType == ProjectileSpellType.Streak)
+                        {
+                            dmgMod = (float)PropertyManager.GetDouble("pvp_dmg_mod_void_streak").Item; // scales void streak damages
+                        }
+
+                        if (criticalHit)
+                        {
+                            dmgMod *= (float)PropertyManager.GetDouble("pvp_dmg_mod_void_crit").Item;
+                            if (weapon.HasImbuedEffect(ImbuedEffectType.CripplingBlow))
+                            {
+                                dmgMod *= (float)PropertyManager.GetDouble("pvp_dmg_mod_void_cb_crit").Item;
+                            }
+                        }
+
+                        finalDamage = finalDamage * dmgMod;
+                    }
+
+                    //Apply Arena 1v1 Dmg Mod
+                    if (isArena1v1)
+                    {
+                        dmgMod = (float)PropertyManager.GetDouble("arena_1v1_global_dmg_mod").Item;
+                        finalDamage = finalDamage * dmgMod;
                     }
                 }
-            }
 
-            return finalDamage;
+                //For town control, reduce the dmg on the boss based on distance of attacker
+                if (target.IsTownControlConflictBoss && sourcePlayer != null)
+                {
+                    var distance = target.Location.DistanceTo(sourcePlayer.Location);
+                    if (distance > 15)
+                    {
+                        var distanceMod = 0.2f * (20 - distance);
+                        if (distanceMod < 0)
+                            distanceMod = 0;
+
+                        finalDamage = finalDamage * distanceMod;
+                    }
+                }
+
+                //Arenas - If this is an arena landblock
+                //track dmg dealt and received
+                if (targetPlayer != null && ArenaLocation.IsArenaLandblock(targetPlayer.Location.Landblock))
+                {
+                    var arenaEvent = ArenaManager.GetArenaEventByLandblock(targetPlayer.Location.Landblock);
+                    if (arenaEvent != null && arenaEvent.Status == 4 && sourcePlayer != null)
+                    {
+                        var attackerArenaPlayer = arenaEvent.Players.FirstOrDefault(x => x.CharacterId == sourcePlayer.Character.Id);
+                        var defenderArenaPlayer = arenaEvent.Players.FirstOrDefault(x => x.CharacterId == targetPlayer.Character.Id);
+
+                        if (attackerArenaPlayer != null && defenderArenaPlayer != null)
+                        {
+                            attackerArenaPlayer.TotalDmgDealt += (uint)Math.Round(finalDamage);
+                            defenderArenaPlayer.TotalDmgReceived += (uint)Math.Round(finalDamage);
+                        }
+                    }
+                }
+
+                return finalDamage;
+            }
+            catch(Exception ex)
+            {
+                log.ErrorFormat("Exception in SpellProjectile.CalculateDamage. Source = {0}, Target = {1}\nEx: {2}", source?.Name, target?.Name, ex);
+                return 0;
+            }
         }
 
         public float GetAbsorbMod(Creature target)
